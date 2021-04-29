@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2014 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,20 +31,65 @@
     files in the program, then also delete it here.
 */
 
-#include "stereo_picture_frame.h"
-#include "exceptions.h"
-#include "util.h"
-#include "rgb_xyz.h"
+
+/** @file  src/stereo_picture_frame.cc
+ *  @brief StereoPictureFrame class
+ */
+
+
 #include "colour_conversion.h"
 #include "compose.hpp"
-#include "j2k.h"
 #include "crypto_context.h"
+#include "exceptions.h"
+#include "j2k_transcode.h"
+#include "rgb_xyz.h"
+#include "stereo_picture_frame.h"
+#include "util.h"
 #include <asdcp/AS_DCP.h>
 #include <asdcp/KM_fileio.h>
 
+
 using std::string;
-using boost::shared_ptr;
+using std::shared_ptr;
+using std::make_shared;
 using namespace dcp;
+
+
+StereoPictureFrame::Part::Part (shared_ptr<ASDCP::JP2K::SFrameBuffer> buffer, Eye eye)
+	: _buffer (buffer)
+	, _eye (eye)
+{
+
+}
+
+
+ASDCP::JP2K::FrameBuffer &
+StereoPictureFrame::Part::mono () const
+{
+	return _eye == Eye::LEFT ? _buffer->Left : _buffer->Right;
+}
+
+
+uint8_t const *
+StereoPictureFrame::Part::data () const
+{
+	return mono().RoData();
+}
+
+
+uint8_t *
+StereoPictureFrame::Part::data ()
+{
+	return mono().Data();
+}
+
+
+int
+StereoPictureFrame::Part::size () const
+{
+	return mono().Size();
+}
+
 
 /** Make a picture frame from a 3D (stereoscopic) asset.
  *  @param reader Reader for the MXF file.
@@ -53,22 +98,19 @@ using namespace dcp;
 StereoPictureFrame::StereoPictureFrame (ASDCP::JP2K::MXFSReader* reader, int n, shared_ptr<DecryptionContext> c)
 {
 	/* XXX: unfortunate guesswork on this buffer size */
-	_buffer = new ASDCP::JP2K::SFrameBuffer (4 * Kumu::Megabyte);
+	_buffer = make_shared<ASDCP::JP2K::SFrameBuffer>(4 * Kumu::Megabyte);
 
 	if (ASDCP_FAILURE (reader->ReadFrame (n, *_buffer, c->context(), c->hmac()))) {
-		boost::throw_exception (DCPReadError (String::compose ("could not read video frame %1 of %2", n)));
+		boost::throw_exception (ReadError (String::compose ("could not read video frame %1 of %2", n)));
 	}
 }
 
+
 StereoPictureFrame::StereoPictureFrame ()
 {
-	_buffer = new ASDCP::JP2K::SFrameBuffer (4 * Kumu::Megabyte);
+	_buffer = make_shared<ASDCP::JP2K::SFrameBuffer>(4 * Kumu::Megabyte);
 }
 
-StereoPictureFrame::~StereoPictureFrame ()
-{
-	delete _buffer;
-}
 
 /** @param eye Eye to return (EYE_LEFT or EYE_RIGHT).
  *  @param reduce a factor by which to reduce the resolution
@@ -79,47 +121,27 @@ shared_ptr<OpenJPEGImage>
 StereoPictureFrame::xyz_image (Eye eye, int reduce) const
 {
 	switch (eye) {
-	case EYE_LEFT:
-		return decompress_j2k (const_cast<uint8_t*> (_buffer->Left.RoData()), _buffer->Left.Size(), reduce);
-	case EYE_RIGHT:
-		return decompress_j2k (const_cast<uint8_t*> (_buffer->Right.RoData()), _buffer->Right.Size(), reduce);
+	case Eye::LEFT:
+		return decompress_j2k (const_cast<uint8_t*>(_buffer->Left.RoData()), _buffer->Left.Size(), reduce);
+	case Eye::RIGHT:
+		return decompress_j2k (const_cast<uint8_t*>(_buffer->Right.RoData()), _buffer->Right.Size(), reduce);
 	}
 
-	return shared_ptr<OpenJPEGImage> ();
+	return {};
 }
 
-uint8_t const *
-StereoPictureFrame::left_j2k_data () const
+
+shared_ptr<StereoPictureFrame::Part>
+StereoPictureFrame::right () const
 {
-	return _buffer->Left.RoData ();
+	return make_shared<Part>(_buffer, Eye::RIGHT);
 }
 
-uint8_t*
-StereoPictureFrame::left_j2k_data ()
+
+shared_ptr<StereoPictureFrame::Part>
+StereoPictureFrame::left () const
 {
-	return _buffer->Left.Data ();
+	return make_shared<Part>(_buffer, Eye::LEFT);
 }
 
-int
-StereoPictureFrame::left_j2k_size () const
-{
-	return _buffer->Left.Size ();
-}
 
-uint8_t const *
-StereoPictureFrame::right_j2k_data () const
-{
-	return _buffer->Right.RoData ();
-}
-
-uint8_t*
-StereoPictureFrame::right_j2k_data ()
-{
-	return _buffer->Right.Data ();
-}
-
-int
-StereoPictureFrame::right_j2k_size () const
-{
-	return _buffer->Right.Size ();
-}

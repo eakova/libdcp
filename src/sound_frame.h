@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2017 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,29 +31,37 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/sound_frame.h
- *  @brief SoundFrame class.
+ *  @brief SoundFrame class
  */
+
 
 #ifndef LIBDCP_SOUND_FRAME_H
 #define LIBDCP_SOUND_FRAME_H
 
+
 #include "frame.h"
 #include <asdcp/AS_DCP.h>
 
+
 namespace dcp {
+
 
 class SoundFrame : public Frame<ASDCP::PCM::MXFReader, ASDCP::PCM::FrameBuffer>
 {
 public:
-	SoundFrame (ASDCP::PCM::MXFReader* reader, int n, boost::shared_ptr<const DecryptionContext> c);
+	SoundFrame (ASDCP::PCM::MXFReader* reader, int n, std::shared_ptr<const DecryptionContext> c);
+	int channels () const;
 	int samples () const;
 	int32_t get (int channel, int sample) const;
 
 private:
-	int _channels;
+	int _channels = 0;
 };
 
+
 }
+
 
 #endif

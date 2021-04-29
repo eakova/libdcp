@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2013-2018 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2013-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,6 +31,12 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/encrypted_kdm.cc
+ *  @brief EncryptedKDM class
+ */
+
+
 #include "encrypted_kdm.h"
 #include "util.h"
 #include "certificate_chain.h"
@@ -42,23 +48,27 @@
 #include <libxml/parser.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/foreach.hpp>
 #include <boost/format.hpp>
+
 
 using std::list;
 using std::vector;
 using std::string;
+using std::make_shared;
 using std::map;
 using std::pair;
-using boost::shared_ptr;
+using std::shared_ptr;
 using boost::optional;
 using boost::starts_with;
 using namespace dcp;
 
+
 namespace dcp {
+
 
 /** Namespace for classes used to hold our data; they are internal to this .cc file */
 namespace data {
+
 
 class Signer
 {
@@ -82,12 +92,13 @@ public:
 	string x509_serial_number;
 };
 
+
 class X509Data
 {
 public:
 	X509Data () {}
 
-	explicit X509Data (boost::shared_ptr<const cxml::Node> node)
+	explicit X509Data (std::shared_ptr<const cxml::Node> node)
 		: x509_issuer_serial (Signer (node->node_child ("X509IssuerSerial")))
 		, x509_certificate (node->string_child ("X509Certificate"))
 	{
@@ -103,6 +114,7 @@ public:
 	Signer x509_issuer_serial;
 	std::string x509_certificate;
 };
+
 
 class Reference
 {
@@ -131,6 +143,7 @@ public:
 	string digest_value;
 };
 
+
 class SignedInfo
 {
 public:
@@ -141,12 +154,11 @@ public:
 
 	explicit SignedInfo (shared_ptr<const cxml::Node> node)
 	{
-		list<shared_ptr<cxml::Node> > references = node->node_children ("Reference");
-		for (list<shared_ptr<cxml::Node> >::const_iterator i = references.begin(); i != references.end(); ++i) {
-			if ((*i)->string_attribute ("URI") == "#ID_AuthenticatedPublic") {
-				authenticated_public = Reference (*i);
-			} else if ((*i)->string_attribute ("URI") == "#ID_AuthenticatedPrivate") {
-				authenticated_private = Reference (*i);
+		for (auto i: node->node_children ("Reference")) {
+			if (i->string_attribute("URI") == "#ID_AuthenticatedPublic") {
+				authenticated_public = Reference(i);
+			} else if (i->string_attribute("URI") == "#ID_AuthenticatedPrivate") {
+				authenticated_private = Reference(i);
 			}
 
 			/* XXX: do something if we don't recognise the node */
@@ -172,6 +184,7 @@ private:
 	Reference authenticated_private;
 };
 
+
 class Signature
 {
 public:
@@ -181,9 +194,8 @@ public:
 		: signed_info (node->node_child ("SignedInfo"))
 		, signature_value (node->string_child ("SignatureValue"))
 	{
-		list<shared_ptr<cxml::Node> > x509_data_nodes = node->node_child("KeyInfo")->node_children ("X509Data");
-		for (list<shared_ptr<cxml::Node> >::const_iterator i = x509_data_nodes.begin(); i != x509_data_nodes.end(); ++i) {
-			x509_data.push_back (X509Data (*i));
+		for (auto i: node->node_child("KeyInfo")->node_children ("X509Data")) {
+			x509_data.push_back(X509Data(i));
 		}
 	}
 
@@ -192,16 +204,17 @@ public:
 		signed_info.as_xml (node->add_child ("SignedInfo", "ds"));
 		node->add_child("SignatureValue", "ds")->add_child_text (signature_value);
 
-		xmlpp::Element* key_info_node = node->add_child ("KeyInfo", "ds");
-		for (std::list<X509Data>::const_iterator i = x509_data.begin(); i != x509_data.end(); ++i) {
-			i->as_xml (key_info_node->add_child ("X509Data", "ds"));
+		auto key_info_node = node->add_child("KeyInfo", "ds");
+		for (auto i: x509_data) {
+			i.as_xml (key_info_node->add_child("X509Data", "ds"));
 		}
 	}
 
 	SignedInfo signed_info;
 	string signature_value;
-	list<X509Data> x509_data;
+	vector<X509Data> x509_data;
 };
+
 
 class AuthenticatedPrivate
 {
@@ -210,9 +223,8 @@ public:
 
 	explicit AuthenticatedPrivate (shared_ptr<const cxml::Node> node)
 	{
-		list<shared_ptr<cxml::Node> > encrypted_key_nodes = node->node_children ("EncryptedKey");
-		for (list<shared_ptr<cxml::Node> >::const_iterator i = encrypted_key_nodes.begin(); i != encrypted_key_nodes.end(); ++i) {
-			encrypted_key.push_back ((*i)->node_child("CipherData")->string_child ("CipherValue"));
+		for (auto i: node->node_children ("EncryptedKey")) {
+			encrypted_key.push_back (i->node_child("CipherData")->string_child("CipherValue"));
 		}
 	}
 
@@ -220,23 +232,24 @@ public:
 	{
 		references["ID_AuthenticatedPrivate"] = node->set_attribute ("Id", "ID_AuthenticatedPrivate");
 
-		for (list<string>::const_iterator i = encrypted_key.begin(); i != encrypted_key.end(); ++i) {
-			xmlpp::Element* encrypted_key = node->add_child ("EncryptedKey", "enc");
+		for (auto i: encrypted_key) {
+			auto encrypted_key = node->add_child ("EncryptedKey", "enc");
 			/* XXX: hack for testing with Dolby */
 			encrypted_key->set_namespace_declaration ("http://www.w3.org/2001/04/xmlenc#", "enc");
-			xmlpp::Element* encryption_method = encrypted_key->add_child ("EncryptionMethod", "enc");
+			auto encryption_method = encrypted_key->add_child("EncryptionMethod", "enc");
 			encryption_method->set_attribute ("Algorithm", "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p");
-			xmlpp::Element* digest_method = encryption_method->add_child ("DigestMethod", "ds");
+			auto digest_method = encryption_method->add_child ("DigestMethod", "ds");
 			/* XXX: hack for testing with Dolby */
 			digest_method->set_namespace_declaration ("http://www.w3.org/2000/09/xmldsig#", "ds");
 			digest_method->set_attribute ("Algorithm", "http://www.w3.org/2000/09/xmldsig#sha1");
-			xmlpp::Element* cipher_data = encrypted_key->add_child ("CipherData", "enc");
-			cipher_data->add_child("CipherValue", "enc")->add_child_text (*i);
+			auto cipher_data = encrypted_key->add_child("CipherData", "enc");
+			cipher_data->add_child("CipherValue", "enc")->add_child_text (i);
 		}
 	}
 
-	list<string> encrypted_key;
+	vector<string> encrypted_key;
 };
+
 
 class TypedKeyId
 {
@@ -257,7 +270,7 @@ public:
 
 	void as_xml (xmlpp::Element* node) const
 	{
-		xmlpp::Element* type = node->add_child("KeyType");
+		auto type = node->add_child("KeyType");
 		type->add_child_text (key_type);
 		node->add_child("KeyId")->add_child_text ("urn:uuid:" + key_id);
 		/* XXX: this feels like a bit of a hack */
@@ -272,6 +285,7 @@ public:
 	string key_id;
 };
 
+
 class KeyIdList
 {
 public:
@@ -279,21 +293,21 @@ public:
 
 	explicit KeyIdList (shared_ptr<const cxml::Node> node)
 	{
-		list<shared_ptr<cxml::Node> > typed_key_id_nodes = node->node_children ("TypedKeyId");
-		for (list<shared_ptr<cxml::Node> >::const_iterator i = typed_key_id_nodes.begin(); i != typed_key_id_nodes.end(); ++i) {
-			typed_key_id.push_back (TypedKeyId (*i));
+		for (auto i: node->node_children ("TypedKeyId")) {
+			typed_key_id.push_back(TypedKeyId(i));
 		}
 	}
 
 	void as_xml (xmlpp::Element* node) const
 	{
-		for (list<TypedKeyId>::const_iterator i = typed_key_id.begin(); i != typed_key_id.end(); ++i) {
-			i->as_xml (node->add_child("TypedKeyId"));
+		for (auto const& i: typed_key_id) {
+			i.as_xml (node->add_child("TypedKeyId"));
 		}
 	}
 
-	list<TypedKeyId> typed_key_id;
+	vector<TypedKeyId> typed_key_id;
 };
+
 
 class AuthorizedDeviceInfo
 {
@@ -304,7 +318,7 @@ public:
 		: device_list_identifier (remove_urn_uuid (node->string_child ("DeviceListIdentifier")))
 		, device_list_description (node->optional_string_child ("DeviceListDescription"))
 	{
-		BOOST_FOREACH (cxml::ConstNodePtr i, node->node_child("DeviceList")->node_children("CertificateThumbprint")) {
+		for (auto i: node->node_child("DeviceList")->node_children("CertificateThumbprint")) {
 			certificate_thumbprints.push_back (i->content ());
 		}
 	}
@@ -315,8 +329,8 @@ public:
 		if (device_list_description) {
 			node->add_child ("DeviceListDescription")->add_child_text (device_list_description.get());
 		}
-		xmlpp::Element* device_list = node->add_child ("DeviceList");
-		BOOST_FOREACH (string i, certificate_thumbprints) {
+		auto device_list = node->add_child ("DeviceList");
+		for (auto i: certificate_thumbprints) {
 			device_list->add_child("CertificateThumbprint")->add_child_text (i);
 		}
 	}
@@ -324,8 +338,9 @@ public:
 	/** DeviceListIdentifier without the urn:uuid: prefix */
 	string device_list_identifier;
 	boost::optional<string> device_list_description;
-	std::list<string> certificate_thumbprints;
+	std::vector<string> certificate_thumbprints;
 };
+
 
 class X509IssuerSerial
 {
@@ -349,6 +364,7 @@ public:
 	string x509_serial_number;
 };
 
+
 class Recipient
 {
 public:
@@ -371,6 +387,7 @@ public:
 	string x509_subject_name;
 };
 
+
 class KDMRequiredExtensions
 {
 public:
@@ -388,14 +405,14 @@ public:
 		disable_forensic_marking_picture = false;
 		disable_forensic_marking_audio = optional<int>();
 		if (node->optional_node_child("ForensicMarkFlagList")) {
-			BOOST_FOREACH (cxml::ConstNodePtr i, node->node_child("ForensicMarkFlagList")->node_children("ForensicMarkFlag")) {
+			for (auto i: node->node_child("ForensicMarkFlagList")->node_children("ForensicMarkFlag")) {
 				if (i->content() == picture_disable) {
 					disable_forensic_marking_picture = true;
 				} else if (starts_with(i->content(), audio_disable)) {
 					disable_forensic_marking_audio = 0;
 					string const above = audio_disable + "-above-channel-";
 					if (starts_with(i->content(), above)) {
-						string above_number = i->content().substr(above.length());
+						auto above_number = i->content().substr(above.length());
 						if (above_number == "") {
 							throw KDMFormatError("Badly-formatted ForensicMarkFlag");
 						}
@@ -424,12 +441,12 @@ public:
 		key_id_list.as_xml (node->add_child ("KeyIdList"));
 
 		if (disable_forensic_marking_picture || disable_forensic_marking_audio) {
-			xmlpp::Element* forensic_mark_flag_list = node->add_child ("ForensicMarkFlagList");
+			auto forensic_mark_flag_list = node->add_child ("ForensicMarkFlagList");
 			if (disable_forensic_marking_picture) {
 				forensic_mark_flag_list->add_child("ForensicMarkFlag")->add_child_text(picture_disable);
 			}
 			if (disable_forensic_marking_audio) {
-				string mrkflg = audio_disable;
+				auto mrkflg = audio_disable;
 				if (*disable_forensic_marking_audio > 0) {
 					mrkflg += String::compose ("-above-channel-%1", *disable_forensic_marking_audio);
 				}
@@ -454,8 +471,10 @@ private:
 	static const string audio_disable;
 };
 
+
 const string KDMRequiredExtensions::picture_disable = "http://www.smpte-ra.org/430-1/2006/KDM#mrkflg-picture-disable";
 const string KDMRequiredExtensions::audio_disable = "http://www.smpte-ra.org/430-1/2006/KDM#mrkflg-audio-disable";
+
 
 class RequiredExtensions
 {
@@ -475,6 +494,7 @@ public:
 
 	KDMRequiredExtensions kdm_required_extensions;
 };
+
 
 class AuthenticatedPublic
 {
@@ -520,6 +540,7 @@ public:
 	RequiredExtensions required_extensions;
 };
 
+
 /** Class to describe our data.  We use a class hierarchy as it's a bit nicer
  *  for XML data than a flat description.
  */
@@ -550,8 +571,8 @@ public:
 		authenticated_private.as_xml (root->add_child ("AuthenticatedPrivate"), references);
 		signature.as_xml (root->add_child ("Signature", "ds"));
 
-		for (map<string, xmlpp::Attribute*>::const_iterator i = references.begin(); i != references.end(); ++i) {
-			xmlAddID (0, document->cobj(), (const xmlChar *) i->first.c_str(), i->second->cobj ());
+		for (auto i: references) {
+			xmlAddID (0, document->cobj(), (const xmlChar *) i.first.c_str(), i.second->cobj());
 		}
 
 		indent (document->get_root_node(), 0);
@@ -563,13 +584,15 @@ public:
 	Signature signature;
 };
 
+
 }
 }
+
 
 EncryptedKDM::EncryptedKDM (string s)
 {
 	try {
-		shared_ptr<cxml::Document> doc (new cxml::Document ("DCinemaSecurityMessage"));
+		auto doc = make_shared<cxml::Document>("DCinemaSecurityMessage");
 		doc->read_string (s);
 		_data = new data::EncryptedKDMData (doc);
 	} catch (xmlpp::parse_error& e) {
@@ -577,7 +600,7 @@ EncryptedKDM::EncryptedKDM (string s)
 	}
 }
 
-/** @param trusted_devices Trusted device thumbprints */
+
 EncryptedKDM::EncryptedKDM (
 	shared_ptr<const CertificateChain> signer,
 	Certificate recipient,
@@ -590,8 +613,8 @@ EncryptedKDM::EncryptedKDM (
 	Formulation formulation,
 	bool disable_forensic_marking_picture,
 	optional<int> disable_forensic_marking_audio,
-	list<pair<string, string> > key_ids,
-	list<string> keys
+	vector<pair<string, string>> key_ids,
+	vector<string> keys
 	)
 	: _data (new data::EncryptedKDMData)
 {
@@ -606,17 +629,17 @@ EncryptedKDM::EncryptedKDM (
 	 * DCI_SPECIFIC                       as specified          Yes
 	 */
 
-	data::AuthenticatedPublic& aup = _data->authenticated_public;
+	auto& aup = _data->authenticated_public;
 	aup.signer.x509_issuer_name = signer->leaf().issuer ();
 	aup.signer.x509_serial_number = signer->leaf().serial ();
 	aup.annotation_text = annotation_text;
 
-	data::KDMRequiredExtensions& kre = _data->authenticated_public.required_extensions.kdm_required_extensions;
+	auto& kre = _data->authenticated_public.required_extensions.kdm_required_extensions;
 	kre.recipient.x509_issuer_serial.x509_issuer_name = recipient.issuer ();
 	kre.recipient.x509_issuer_serial.x509_serial_number = recipient.serial ();
 	kre.recipient.x509_subject_name = recipient.subject ();
 	kre.composition_playlist_id = cpl_id;
-	if (formulation == DCI_ANY || formulation == DCI_SPECIFIC) {
+	if (formulation == Formulation::DCI_ANY || formulation == Formulation::DCI_SPECIFIC) {
 		kre.content_authenticator = signer->leaf().thumbprint ();
 	}
 	kre.content_title_text = content_title_text;
@@ -625,19 +648,19 @@ EncryptedKDM::EncryptedKDM (
 	kre.disable_forensic_marking_picture = disable_forensic_marking_picture;
 	kre.disable_forensic_marking_audio = disable_forensic_marking_audio;
 
-	if (formulation != MODIFIED_TRANSITIONAL_TEST) {
+	if (formulation != Formulation::MODIFIED_TRANSITIONAL_TEST) {
 		kre.authorized_device_info = data::AuthorizedDeviceInfo ();
 		kre.authorized_device_info->device_list_identifier = make_uuid ();
-		string n = recipient.subject_common_name ();
+		auto n = recipient.subject_common_name ();
 		if (n.find (".") != string::npos) {
 			n = n.substr (n.find (".") + 1);
 		}
 		kre.authorized_device_info->device_list_description = n;
 
-		if (formulation == MODIFIED_TRANSITIONAL_1 || formulation == DCI_ANY) {
+		if (formulation == Formulation::MODIFIED_TRANSITIONAL_1 || formulation == Formulation::DCI_ANY) {
 			/* Use the "assume trust" thumbprint */
 			kre.authorized_device_info->certificate_thumbprints.push_back ("2jmj7l5rSw0yVb/vlWAYkK/YBwk=");
-		} else if (formulation == MULTIPLE_MODIFIED_TRANSITIONAL_1 || formulation == DCI_SPECIFIC) {
+		} else if (formulation == Formulation::MULTIPLE_MODIFIED_TRANSITIONAL_1 || formulation == Formulation::DCI_SPECIFIC) {
 			if (trusted_devices.empty ()) {
 				/* Fall back on the "assume trust" thumbprint so we
 				   can generate "modified-transitional-1" KDMs
@@ -653,38 +676,39 @@ EncryptedKDM::EncryptedKDM (
 				   recipient's thumbprint (recipient.thumbprint()).
 				   Waimea uses only the trusted devices here, too.
 				*/
-				BOOST_FOREACH (string i, trusted_devices) {
-					kre.authorized_device_info->certificate_thumbprints.push_back (i);
+				for (auto i: trusted_devices) {
+					kre.authorized_device_info->certificate_thumbprints.push_back(i);
 				}
 			}
 		}
 	}
 
-	for (list<pair<string, string> >::const_iterator i = key_ids.begin(); i != key_ids.end(); ++i) {
-		kre.key_id_list.typed_key_id.push_back (data::TypedKeyId (i->first, i->second));
+	for (auto i: key_ids) {
+		kre.key_id_list.typed_key_id.push_back(data::TypedKeyId(i.first, i.second));
 	}
 
 	_data->authenticated_private.encrypted_key = keys;
 
 	/* Read the XML so far and sign it */
-	shared_ptr<xmlpp::Document> doc = _data->as_xml ();
-	xmlpp::Node::NodeList children = doc->get_root_node()->get_children ();
-	for (xmlpp::Node::NodeList::const_iterator i = children.begin(); i != children.end(); ++i) {
-		if ((*i)->get_name() == "Signature") {
-			signer->add_signature_value (dynamic_cast<xmlpp::Element*>(*i), "ds", false);
+	auto doc = _data->as_xml ();
+	for (auto i: doc->get_root_node()->get_children()) {
+		if (i->get_name() == "Signature") {
+			signer->add_signature_value(dynamic_cast<xmlpp::Element*>(i), "ds", false);
 		}
 	}
 
 	/* Read the bits that add_signature_value did back into our variables */
-	shared_ptr<cxml::Node> signed_doc (new cxml::Node (doc->get_root_node ()));
+	auto signed_doc = make_shared<cxml::Node>(doc->get_root_node());
 	_data->signature = data::Signature (signed_doc->node_child ("Signature"));
 }
+
 
 EncryptedKDM::EncryptedKDM (EncryptedKDM const & other)
 	: _data (new data::EncryptedKDMData (*other._data))
 {
 
 }
+
 
 EncryptedKDM &
 EncryptedKDM::operator= (EncryptedKDM const & other)
@@ -698,19 +722,28 @@ EncryptedKDM::operator= (EncryptedKDM const & other)
 	return *this;
 }
 
+
 EncryptedKDM::~EncryptedKDM ()
 {
 	delete _data;
 }
 
+
 void
 EncryptedKDM::as_xml (boost::filesystem::path path) const
 {
-	FILE* f = fopen_boost (path, "w");
-	string const x = as_xml ();
-	fwrite (x.c_str(), 1, x.length(), f);
+	auto f = fopen_boost (path, "w");
+	if (!f) {
+		throw FileError ("Could not open KDM file for writing", path, errno);
+	}
+	auto const x = as_xml ();
+	size_t const written = fwrite (x.c_str(), 1, x.length(), f);
 	fclose (f);
+	if (written != x.length()) {
+		throw FileError ("Could not write to KDM file", path, errno);
+	}
 }
+
 
 string
 EncryptedKDM::as_xml () const
@@ -718,11 +751,13 @@ EncryptedKDM::as_xml () const
 	return _data->as_xml()->write_to_string ("UTF-8");
 }
 
-list<string>
+
+vector<string>
 EncryptedKDM::keys () const
 {
 	return _data->authenticated_private.encrypted_key;
 }
+
 
 string
 EncryptedKDM::id () const
@@ -730,11 +765,13 @@ EncryptedKDM::id () const
 	return _data->authenticated_public.message_id;
 }
 
+
 optional<string>
 EncryptedKDM::annotation_text () const
 {
 	return _data->authenticated_public.annotation_text;
 }
+
 
 string
 EncryptedKDM::content_title_text () const
@@ -742,11 +779,13 @@ EncryptedKDM::content_title_text () const
 	return _data->authenticated_public.required_extensions.kdm_required_extensions.content_title_text;
 }
 
+
 string
 EncryptedKDM::cpl_id () const
 {
 	return _data->authenticated_public.required_extensions.kdm_required_extensions.composition_playlist_id;
 }
+
 
 string
 EncryptedKDM::issue_date () const
@@ -754,11 +793,13 @@ EncryptedKDM::issue_date () const
 	return _data->authenticated_public.issue_date;
 }
 
+
 LocalTime
 EncryptedKDM::not_valid_before () const
 {
 	return _data->authenticated_public.required_extensions.kdm_required_extensions.not_valid_before;
 }
+
 
 LocalTime
 EncryptedKDM::not_valid_after () const
@@ -766,22 +807,25 @@ EncryptedKDM::not_valid_after () const
 	return _data->authenticated_public.required_extensions.kdm_required_extensions.not_valid_after;
 }
 
+
 string
 EncryptedKDM::recipient_x509_subject_name () const
 {
 	return _data->authenticated_public.required_extensions.kdm_required_extensions.recipient.x509_subject_name;
 }
 
+
 CertificateChain
 EncryptedKDM::signer_certificate_chain () const
 {
 	CertificateChain chain;
-	BOOST_FOREACH (data::X509Data const & i, _data->signature.x509_data) {
+	for (auto const& i: _data->signature.x509_data) {
 		string s = "-----BEGIN CERTIFICATE-----\n" + i.x509_certificate + "\n-----END CERTIFICATE-----";
 		chain.add (Certificate(s));
 	}
 	return chain;
 }
+
 
 bool
 dcp::operator== (EncryptedKDM const & a, EncryptedKDM const & b)

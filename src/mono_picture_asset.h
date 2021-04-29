@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2015 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,18 +31,28 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/mono_picture_asset.cc
+ *  @brief MonoPictureAsset class
+ */
+
+
 #ifndef LIBDCP_MONO_PICTURE_ASSET_H
 #define LIBDCP_MONO_PICTURE_ASSET_H
+
 
 #include "picture_asset.h"
 #include "mono_picture_asset_reader.h"
 
+
 namespace dcp {
+
 
 class MonoPictureAssetWriter;
 
+
 /** @class MonoPictureAsset
- *  @brief A 2D (monoscopic) picture asset.
+ *  @brief A 2D (monoscopic) picture asset
  */
 class MonoPictureAsset : public PictureAsset
 {
@@ -58,20 +68,26 @@ public:
 	 */
 	explicit MonoPictureAsset (Fraction edit_rate, Standard standard);
 
-	/** Start a progressive write to a MonoPictureAsset */
-	boost::shared_ptr<PictureAssetWriter> start_write (boost::filesystem::path, bool);
-	boost::shared_ptr<MonoPictureAssetReader> start_read () const;
+	/** Start a progressive write to a MonoPictureAsset.
+	 *  @path file File to write to.
+	 *  @path overwrite true to overwrite an existing file; for use when continuing a write which
+	 *  previously failed.  If in doubt, use false here.
+	 */
+	std::shared_ptr<PictureAssetWriter> start_write (boost::filesystem::path file, bool overwrite) override;
+	std::shared_ptr<MonoPictureAssetReader> start_read () const;
 
 	bool equals (
-		boost::shared_ptr<const Asset> other,
+		std::shared_ptr<const Asset> other,
 		EqualityOptions opt,
 		NoteHandler note
-		) const;
+		) const override;
 
 private:
 	std::string cpl_node_name () const;
 };
 
+
 }
+
 
 #endif

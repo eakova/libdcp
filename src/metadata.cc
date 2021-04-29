@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2014 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,9 +31,11 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/metadata.cc
- *  @brief XMLMetadata and MXFMetadata classes.
+ *  @brief MXFMetadata class
  */
+
 
 #include "metadata.h"
 #include "util.h"
@@ -42,8 +44,9 @@
 #include <iomanip>
 #include <time.h>
 
-using namespace std;
+
 using namespace dcp;
+
 
 MXFMetadata::MXFMetadata ()
 	: company_name ("libdcp")
@@ -53,6 +56,7 @@ MXFMetadata::MXFMetadata ()
 
 }
 
+
 void
 MXFMetadata::read (ASDCP::WriterInfo const & info)
 {
@@ -61,17 +65,3 @@ MXFMetadata::read (ASDCP::WriterInfo const & info)
 	product_version = info.ProductVersion;
 }
 
-XMLMetadata::XMLMetadata ()
-	: issuer ("libdcp" LIBDCP_VERSION)
-	, creator ("libdcp" LIBDCP_VERSION)
-	, annotation_text ("Created by libdcp" LIBDCP_VERSION)
-{
-	set_issue_date_now ();
-}
-
-/** Set the issue date to the current local time */
-void
-XMLMetadata::set_issue_date_now ()
-{
-	issue_date = LocalTime().as_string ();
-}

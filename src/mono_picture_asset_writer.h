@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2015 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,20 +31,25 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/mono_picture_asset_writer.h
  *  @brief MonoPictureAssetWriter class
  */
 
+
 #ifndef LIBDCP_MONO_PICTURE_ASSET_WRITER_H
 #define LIBDCP_MONO_PICTURE_ASSET_WRITER_H
 
+
 #include "picture_asset_writer.h"
-#include <boost/shared_ptr.hpp>
+#include <memory>
 #include <boost/utility.hpp>
 #include <stdint.h>
 #include <string>
 
+
 namespace dcp {
+
 
 /** @class MonoPictureAssetWriter
  *  @brief A helper class for writing to MonoPictureAssets
@@ -59,24 +64,26 @@ namespace dcp {
 class MonoPictureAssetWriter : public PictureAssetWriter
 {
 public:
-	FrameInfo write (uint8_t const *, int);
-	void fake_write (int size);
-	bool finalize ();
+	FrameInfo write (uint8_t const *, int) override;
+	void fake_write (int size) override;
+	bool finalize () override;
 
 private:
 	friend class MonoPictureAsset;
 
-	MonoPictureAssetWriter (PictureAsset *, boost::filesystem::path file, bool);
+	MonoPictureAssetWriter (PictureAsset* a, boost::filesystem::path file, bool);
+
 	void start (uint8_t const *, int);
 
 	/* do this with an opaque pointer so we don't have to include
 	   ASDCP headers
 	*/
-
 	struct ASDCPState;
-	boost::shared_ptr<ASDCPState> _state;
+	std::shared_ptr<ASDCPState> _state;
 };
 
+
 }
+
 
 #endif

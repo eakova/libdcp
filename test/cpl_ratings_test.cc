@@ -31,30 +31,35 @@
     files in the program, then also delete it here.
 */
 
+
 #include "cpl.h"
 #include "test.h"
 #include <boost/test/unit_test.hpp>
 
+
 using std::list;
 using std::string;
+using std::vector;
+using std::shared_ptr;
+using std::make_shared;
+
 
 BOOST_AUTO_TEST_CASE (cpl_ratings)
 {
-	dcp::CPL cpl ("annotation", dcp::FEATURE);
+	dcp::CPL cpl ("annotation", dcp::ContentKind::FEATURE, dcp::Standard::SMPTE);
 
-	list<dcp::Rating> ratings;
-	ratings.push_back (dcp::Rating("http://www.mpaa.org/2003-ratings", "PG-13"));
-	ratings.push_back (dcp::Rating("http://www.movielabs.com/md/ratings/GB/BBFC/1/12A%3C/Agency", "12A"));
+	vector<dcp::Rating> ratings = {
+		dcp::Rating("http://www.mpaa.org/2003-ratings", "PG-13"),
+		dcp::Rating("http://www.movielabs.com/md/ratings/GB/BBFC/1/12A%3C/Agency", "12A")
+	};
 	cpl.set_ratings (ratings);
 
-	cpl.write_xml ("build/test/cpl_ratings.xml", dcp::SMPTE, boost::shared_ptr<dcp::CertificateChain>());
+	auto reel = make_shared<dcp::Reel>();
+	cpl.add (reel);
 
-	list<string> ignore;
-	ignore.push_back ("Id");
-	ignore.push_back ("Issuer");
-	ignore.push_back ("Creator");
-	ignore.push_back ("IssueDate");
-	ignore.push_back ("LabelText");
+	cpl.write_xml ("build/test/cpl_ratings.xml", {});
+
+	vector<string> ignore = { "Id", "Issuer", "Creator", "IssueDate", "LabelText" };
 	check_xml (
 		dcp::file_to_string("build/test/cpl_ratings.xml"),
 		"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
@@ -80,12 +85,16 @@ BOOST_AUTO_TEST_CASE (cpl_ratings)
 		"      <Label>12A</Label>\n"
 		"    </Rating>\n"
 		"  </RatingList>\n"
-		"  <ReelList/>\n"
+		"  <ReelList>\n"
+		"    <Reel>\n"
+		"      <Id>urn:uuid:56a781ed-ace3-4cdf-8391-93b1bcea54eb</Id>\n"
+		"      <AssetList/>\n"
+		"    </Reel>\n"
+		"  </ReelList>\n"
 		"</CompositionPlaylist>\n",
 		ignore
 		);
 
 	dcp::CPL cpl2 ("build/test/cpl_ratings.xml");
-	list<dcp::Rating> ratings2 = cpl2.ratings ();
-	BOOST_TEST(ratings == ratings2);
+	BOOST_TEST(ratings == cpl2.ratings());
 }

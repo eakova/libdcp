@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2015 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,34 +31,41 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/smpte_load_font_node.h
- *  @brief SMPTELoadFontNode class.
+ *  @brief SMPTELoadFontNode class
  */
 
+
 #include "load_font_node.h"
-#include <boost/shared_ptr.hpp>
+#include <memory>
 #include <boost/optional.hpp>
+
 
 namespace cxml {
 	class Node;
 }
 
+
 namespace dcp {
 
+
 /** @class SMPTELoadFontNode
- *  @brief Parser for LoadFont nodes from SMPTE subtitle XML.
+ *  @brief Parser for LoadFont nodes from SMPTE subtitle XML
  */
 class SMPTELoadFontNode : public LoadFontNode
 {
 public:
 	SMPTELoadFontNode () {}
 	SMPTELoadFontNode (std::string id, std::string urn);
-	explicit SMPTELoadFontNode (boost::shared_ptr<const cxml::Node> node);
+	explicit SMPTELoadFontNode (std::shared_ptr<const cxml::Node> node);
 
 	std::string urn;
 };
 
+
 bool operator== (SMPTELoadFontNode const & a, SMPTELoadFontNode const & b);
 bool operator!= (SMPTELoadFontNode const & a, SMPTELoadFontNode const & b);
+
 
 }

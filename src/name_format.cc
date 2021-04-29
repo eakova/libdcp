@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2016 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2016-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,14 +31,21 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/name_format.cc
+ *  @brief NameFormat class
+ */
+
+
 #include "name_format.h"
 #include <boost/optional.hpp>
-#include <boost/foreach.hpp>
+
 
 using std::string;
 using std::map;
 using boost::optional;
 using namespace dcp;
+
 
 static char
 filter (char c)
@@ -52,6 +59,7 @@ filter (char c)
 	return c;
 }
 
+
 static string
 filter (string c)
 {
@@ -64,15 +72,17 @@ filter (string c)
 	return o;
 }
 
+
 string
-NameFormat::get (Map values, string suffix) const
+NameFormat::get (Map values, string suffix, string ignore) const
 {
 	string result;
 	for (size_t i = 0; i < _specification.length(); ++i) {
 		bool done = false;
 		if (_specification[i] == '%' && (i < _specification.length() - 1)) {
-			Map::const_iterator j = values.find(_specification[i + 1]);
-			if (j != values.end()) {
+			char const key = _specification[i + 1];
+			auto j = values.find(key);
+			if (j != values.end() && ignore.find(key) == string::npos) {
 				result += filter (j->second);
 				++i;
 				done = true;
@@ -86,6 +96,7 @@ NameFormat::get (Map values, string suffix) const
 
 	return result + suffix;
 }
+
 
 bool
 dcp::operator== (NameFormat const & a, NameFormat const & b)

@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2014 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,17 +31,21 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/gamma_transfer_function.cc
- *  @brief GammaTransferFunction class.
+ *  @brief GammaTransferFunction class
  */
+
 
 #include "gamma_transfer_function.h"
 #include <cmath>
 
+
 using std::pow;
-using boost::shared_ptr;
-using boost::dynamic_pointer_cast;
+using std::shared_ptr;
+using std::dynamic_pointer_cast;
 using namespace dcp;
+
 
 GammaTransferFunction::GammaTransferFunction (double gamma)
 	: _gamma (gamma)
@@ -49,11 +53,12 @@ GammaTransferFunction::GammaTransferFunction (double gamma)
 
 }
 
+
 double *
 GammaTransferFunction::make_lut (int bit_depth, bool inverse) const
 {
 	int const bit_length = int(std::pow(2.0f, bit_depth));
-	double* lut = new double[bit_length];
+	auto lut = new double[bit_length];
 	double const gamma = inverse ? (1 / _gamma) : _gamma;
 	for (int i = 0; i < bit_length; ++i) {
 		lut[i] = pow(double(i) / (bit_length - 1), gamma);
@@ -62,13 +67,14 @@ GammaTransferFunction::make_lut (int bit_depth, bool inverse) const
 	return lut;
 }
 
+
 bool
 GammaTransferFunction::about_equal (shared_ptr<const TransferFunction> other, double epsilon) const
 {
-	shared_ptr<const GammaTransferFunction> o = dynamic_pointer_cast<const GammaTransferFunction> (other);
+	auto o = dynamic_pointer_cast<const GammaTransferFunction>(other);
 	if (!o) {
 		return false;
 	}
 
-	return fabs (_gamma - o->_gamma) < epsilon;
+	return fabs(_gamma - o->_gamma) < epsilon;
 }

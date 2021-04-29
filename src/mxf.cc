@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2014 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,9 +31,11 @@
     files in the program, then also delete it here.
 */
 
-/** @file  src/asset.cc
- *  @brief Parent class for assets of DCPs made up of MXF files.
+
+/** @file  src/mxf.cc
+ *  @brief MXF class
  */
+
 
 #include "raw_convert.h"
 #include "mxf.h"
@@ -49,13 +51,15 @@
 #include <boost/filesystem.hpp>
 #include <iostream>
 
+
 using std::string;
 using std::cout;
 using std::list;
 using std::pair;
-using boost::shared_ptr;
-using boost::dynamic_pointer_cast;
+using std::shared_ptr;
+using std::dynamic_pointer_cast;
 using namespace dcp;
+
 
 MXF::MXF ()
 	: _context_id (make_uuid ())
@@ -65,6 +69,7 @@ MXF::MXF ()
 	*/
 }
 
+
 MXF::MXF (Standard standard)
 	: _context_id (make_uuid ())
 	, _standard (standard)
@@ -72,15 +77,16 @@ MXF::MXF (Standard standard)
 
 }
 
+
 void
 MXF::fill_writer_info (ASDCP::WriterInfo* writer_info, string id) const
 {
 	writer_info->ProductVersion = _metadata.product_version;
 	writer_info->CompanyName = _metadata.company_name;
-	writer_info->ProductName = _metadata.product_name.c_str();
+	writer_info->ProductName = _metadata.product_name;
 
 	DCP_ASSERT (_standard);
-	if (_standard == INTEROP) {
+	if (_standard == Standard::INTEROP) {
 		writer_info->LabelSetType = ASDCP::LS_MXF_INTEROP;
 	} else {
 		writer_info->LabelSetType = ASDCP::LS_MXF_SMPTE;
@@ -101,11 +107,7 @@ MXF::fill_writer_info (ASDCP::WriterInfo* writer_info, string id) const
 	}
 }
 
-/** Set the (private) key that will be used to encrypt or decrypt this MXF's content.
- *  This is the top-secret key that is distributed (itself encrypted) to cinemas
- *  via Key Delivery Messages (KDMs).
- *  @param key Key to use.
- */
+
 void
 MXF::set_key (Key key)
 {
@@ -116,6 +118,7 @@ MXF::set_key (Key key)
 		_key_id = make_uuid ();
 	}
 }
+
 
 string
 MXF::read_writer_info (ASDCP::WriterInfo const & info)
@@ -129,13 +132,13 @@ MXF::read_writer_info (ASDCP::WriterInfo const & info)
 
 	switch (info.LabelSetType) {
 	case ASDCP::LS_MXF_INTEROP:
-		_standard = INTEROP;
+		_standard = Standard::INTEROP;
 		break;
 	case ASDCP::LS_MXF_SMPTE:
-		_standard = SMPTE;
+		_standard = Standard::SMPTE;
 		break;
 	default:
-		throw DCPReadError ("Unrecognised label set type in MXF");
+		throw ReadError ("Unrecognised label set type in MXF");
 	}
 
 	_metadata.read (info);

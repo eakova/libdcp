@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2014-2019 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2014-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,43 +31,51 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/reel_mono_picture_asset.h
- *  @brief ReelMonoPictureAsset class.
+ *  @brief ReelMonoPictureAsset class
  */
+
 
 #ifndef LIBDCP_REEL_MONO_PICTURE_ASSET_H
 #define LIBDCP_REEL_MONO_PICTURE_ASSET_H
 
+
 #include "reel_picture_asset.h"
 #include "mono_picture_asset.h"
 
+
 namespace dcp {
+
 
 class MonoPictureAsset;
 
+
 /** @class ReelMonoPictureAsset
- *  @brief Part of a Reel's description which refers to a monoscopic picture asset.
+ *  @brief Part of a Reel's description which refers to a monoscopic picture asset
  */
 class ReelMonoPictureAsset : public ReelPictureAsset
 {
 public:
-	ReelMonoPictureAsset (boost::shared_ptr<MonoPictureAsset> asset, int64_t entry_point);
-	explicit ReelMonoPictureAsset (boost::shared_ptr<const cxml::Node>);
+	ReelMonoPictureAsset (std::shared_ptr<MonoPictureAsset> asset, int64_t entry_point);
+	explicit ReelMonoPictureAsset (std::shared_ptr<const cxml::Node>);
 
 	/** @return the MonoPictureAsset that this object refers to */
-	boost::shared_ptr<const MonoPictureAsset> mono_asset () const {
-		return asset_of_type<const MonoPictureAsset> ();
+	std::shared_ptr<const MonoPictureAsset> mono_asset () const {
+		return asset_of_type<const MonoPictureAsset>();
 	}
 
 	/** @return the MonoPictureAsset that this object refers to */
-	boost::shared_ptr<MonoPictureAsset> mono_asset () {
-		return asset_of_type<MonoPictureAsset> ();
+	std::shared_ptr<MonoPictureAsset> mono_asset () {
+		return asset_of_type<MonoPictureAsset>();
 	}
 
 private:
-	std::string cpl_node_name (Standard standard) const;
+	std::string cpl_node_name (Standard standard) const override;
 };
 
+
 }
+
 
 #endif

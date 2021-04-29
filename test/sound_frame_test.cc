@@ -39,7 +39,7 @@
 #include "exceptions.h"
 #include <sndfile.h>
 
-using boost::shared_ptr;
+using std::shared_ptr;
 
 BOOST_AUTO_TEST_CASE (sound_frame_test)
 {
@@ -64,6 +64,7 @@ BOOST_AUTO_TEST_CASE (sound_frame_test)
 	int const read = sf_readf_int (sndfile, ref_data, frame_length);
 	BOOST_REQUIRE_EQUAL (read, frame_length);
 
+	/* Check raw data is as we expect */
 	uint8_t const * p = frame->data ();
 	for (int i = 0; i < (frame_length * channels); ++i) {
 		int x = ref_data[i] >> 8;
@@ -74,16 +75,27 @@ BOOST_AUTO_TEST_CASE (sound_frame_test)
 		BOOST_REQUIRE_EQUAL (x, y);
 		p += 3;
 	}
+
+	/* Check SoundFrame::get() */
+	int* ref = ref_data;
+	for (int sample = 0; sample < frame_length; ++sample) {
+		for (int channel = 0; channel < channels; ++channel) {
+			BOOST_REQUIRE_EQUAL ((*ref++) >> 8, frame->get(channel, sample));
+		}
+	}
 }
 
 BOOST_AUTO_TEST_CASE (sound_frame_test2)
 {
-	BOOST_CHECK_THROW (dcp::SoundAsset("frobozz"), dcp::FileError);
+	{
+		dcp::ASDCPErrorSuspender sus;
+		BOOST_CHECK_THROW (dcp::SoundAsset("frobozz"), dcp::FileError);
+	}
 
 	dcp::SoundAsset asset (
 		private_test /
 		"TONEPLATES-SMPTE-PLAINTEXT_TST_F_XX-XX_ITL-TD_51-XX_2K_WOE_20111001_WOE_OV/pcm_95734608-5d47-4d3f-bf5f-9e9186b66afa_.mxf"
 		);
 
-	BOOST_CHECK_THROW (asset.start_read()->get_frame (99999999), dcp::DCPReadError);
+	BOOST_CHECK_THROW (asset.start_read()->get_frame (99999999), dcp::ReadError);
 }

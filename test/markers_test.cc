@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2019 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2019-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,76 +31,76 @@
     files in the program, then also delete it here.
 */
 
+
+#include <boost/bind.hpp>
+#include <memory>
+#include <boost/test/unit_test.hpp>
 #include "cpl.h"
 #include "reel.h"
 #include "reel_markers_asset.h"
-#include <boost/shared_ptr.hpp>
-#include <boost/test/unit_test.hpp>
+
 
 using std::string;
-using boost::shared_ptr;
+using std::shared_ptr;
+using std::make_shared;
+
 
 BOOST_AUTO_TEST_CASE (markers_write_test)
 {
-	dcp::CPL cpl("Markers test", dcp::TEST);
+	dcp::CPL cpl("Markers test", dcp::ContentKind::TEST, dcp::Standard::SMPTE);
 
-	shared_ptr<dcp::ReelMarkersAsset> asset (new dcp::ReelMarkersAsset(dcp::Fraction(24, 1), 0));
-	asset->set (dcp::FFOC, dcp::Time(1, 1, 9, 16, 24));
-	asset->set (dcp::LFOC, dcp::Time(2, 5, 3, 0, 24));
-	asset->set (dcp::FFTC, dcp::Time(0, 6, 4, 2, 24));
-	asset->set (dcp::LFTC, dcp::Time(0, 6, 4, 18, 24));
-	asset->set (dcp::FFOI, dcp::Time(3, 6, 4, 18, 24));
-	asset->set (dcp::LFOI, dcp::Time(3, 2, 4, 18, 24));
-	asset->set (dcp::FFEC, dcp::Time(3, 2, 7, 18, 24));
-	asset->set (dcp::LFEC, dcp::Time(3, 2, 8, 18, 24));
-	asset->set (dcp::FFMC, dcp::Time(4, 2, 8, 18, 24));
-	asset->set (dcp::LFMC, dcp::Time(4, 3, 8, 18, 24));
+	auto asset = make_shared<dcp::ReelMarkersAsset>(dcp::Fraction(24, 1), 432000, 0);
+	asset->set (dcp::Marker::FFOC, dcp::Time(1, 1, 9, 16, 24));
+	asset->set (dcp::Marker::LFOC, dcp::Time(2, 5, 3, 0, 24));
+	asset->set (dcp::Marker::FFTC, dcp::Time(0, 6, 4, 2, 24));
+	asset->set (dcp::Marker::LFTC, dcp::Time(0, 6, 4, 18, 24));
+	asset->set (dcp::Marker::FFOI, dcp::Time(3, 6, 4, 18, 24));
+	asset->set (dcp::Marker::LFOI, dcp::Time(3, 2, 4, 18, 24));
+	asset->set (dcp::Marker::FFEC, dcp::Time(3, 2, 7, 18, 24));
+	asset->set (dcp::Marker::LFEC, dcp::Time(3, 2, 8, 18, 24));
+	asset->set (dcp::Marker::FFMC, dcp::Time(4, 2, 8, 18, 24));
+	asset->set (dcp::Marker::LFMC, dcp::Time(4, 3, 8, 18, 24));
 
-	shared_ptr<dcp::Reel> reel (new dcp::Reel());
+	auto reel = make_shared<dcp::Reel>();
 	reel->add (asset);
 
 	cpl.add (reel);
 
-	cpl.write_xml ("build/test/markers_test.xml", dcp::SMPTE, shared_ptr<dcp::CertificateChain>());
+	cpl.write_xml ("build/test/markers_test.xml", {});
 }
 
-static void
-note_handler (dcp::NoteType, string)
-{
-
-}
 
 BOOST_AUTO_TEST_CASE (markers_read_test, * boost::unit_test::depends_on("markers_write_test"))
 {
 	dcp::CPL cpl ("build/test/markers_test.xml");
 	BOOST_CHECK_EQUAL (cpl.reels().size(), 1);
-	shared_ptr<dcp::Reel> reel = cpl.reels().front();
-	shared_ptr<dcp::ReelMarkersAsset> markers = reel->main_markers ();
+	auto reel = cpl.reels().front();
+	auto markers = reel->main_markers ();
 	BOOST_REQUIRE (markers);
 
-	BOOST_REQUIRE (markers->get(dcp::FFOC));
-	BOOST_CHECK (markers->get(dcp::FFOC) == dcp::Time(1, 1, 9, 16, 24));
-	BOOST_REQUIRE (markers->get(dcp::LFOC));
-	BOOST_CHECK (markers->get(dcp::LFOC) == dcp::Time(2, 5, 3, 0, 24));
-	BOOST_REQUIRE (markers->get(dcp::FFTC));
-	BOOST_CHECK (markers->get (dcp::FFTC) == dcp::Time(0, 6, 4, 2, 24));
-	BOOST_REQUIRE (markers->get(dcp::LFTC));
-	BOOST_CHECK (markers->get (dcp::LFTC) == dcp::Time(0, 6, 4, 18, 24));
-	BOOST_REQUIRE (markers->get(dcp::FFOI));
-	BOOST_CHECK (markers->get (dcp::FFOI) == dcp::Time(3, 6, 4, 18, 24));
-	BOOST_REQUIRE (markers->get(dcp::LFOI));
-	BOOST_CHECK (markers->get (dcp::LFOI) == dcp::Time(3, 2, 4, 18, 24));
-	BOOST_REQUIRE (markers->get(dcp::FFEC));
-	BOOST_CHECK (markers->get (dcp::FFEC) == dcp::Time(3, 2, 7, 18, 24));
-	BOOST_REQUIRE (markers->get(dcp::LFEC));
-	BOOST_CHECK (markers->get (dcp::LFEC) == dcp::Time(3, 2, 8, 18, 24));
-	BOOST_REQUIRE (markers->get(dcp::FFMC));
-	BOOST_CHECK (markers->get (dcp::FFMC) == dcp::Time(4, 2, 8, 18, 24));
-	BOOST_REQUIRE (markers->get(dcp::LFMC));
-	BOOST_CHECK (markers->get (dcp::LFMC) == dcp::Time(4, 3, 8, 18, 24));
+	BOOST_REQUIRE (markers->get(dcp::Marker::FFOC));
+	BOOST_CHECK (markers->get(dcp::Marker::FFOC) == dcp::Time(1, 1, 9, 16, 24));
+	BOOST_REQUIRE (markers->get(dcp::Marker::LFOC));
+	BOOST_CHECK (markers->get(dcp::Marker::LFOC) == dcp::Time(2, 5, 3, 0, 24));
+	BOOST_REQUIRE (markers->get(dcp::Marker::FFTC));
+	BOOST_CHECK (markers->get (dcp::Marker::FFTC) == dcp::Time(0, 6, 4, 2, 24));
+	BOOST_REQUIRE (markers->get(dcp::Marker::LFTC));
+	BOOST_CHECK (markers->get (dcp::Marker::LFTC) == dcp::Time(0, 6, 4, 18, 24));
+	BOOST_REQUIRE (markers->get(dcp::Marker::FFOI));
+	BOOST_CHECK (markers->get (dcp::Marker::FFOI) == dcp::Time(3, 6, 4, 18, 24));
+	BOOST_REQUIRE (markers->get(dcp::Marker::LFOI));
+	BOOST_CHECK (markers->get (dcp::Marker::LFOI) == dcp::Time(3, 2, 4, 18, 24));
+	BOOST_REQUIRE (markers->get(dcp::Marker::FFEC));
+	BOOST_CHECK (markers->get (dcp::Marker::FFEC) == dcp::Time(3, 2, 7, 18, 24));
+	BOOST_REQUIRE (markers->get(dcp::Marker::LFEC));
+	BOOST_CHECK (markers->get (dcp::Marker::LFEC) == dcp::Time(3, 2, 8, 18, 24));
+	BOOST_REQUIRE (markers->get(dcp::Marker::FFMC));
+	BOOST_CHECK (markers->get (dcp::Marker::FFMC) == dcp::Time(4, 2, 8, 18, 24));
+	BOOST_REQUIRE (markers->get(dcp::Marker::LFMC));
+	BOOST_CHECK (markers->get (dcp::Marker::LFMC) == dcp::Time(4, 3, 8, 18, 24));
 
-	BOOST_CHECK (markers->equals(markers, dcp::EqualityOptions(), boost::bind(&note_handler, _1, _2)));
+	BOOST_CHECK (markers->equals(markers, dcp::EqualityOptions(), [](dcp::NoteType, string) {}));
 
-	shared_ptr<dcp::ReelMarkersAsset> markers2 (new dcp::ReelMarkersAsset(dcp::Fraction(24, 1), 0));
-	BOOST_CHECK (!markers->equals(markers2, dcp::EqualityOptions(), boost::bind(&note_handler, _1, _2)));
+	auto markers2 = make_shared<dcp::ReelMarkersAsset>(dcp::Fraction(24, 1), 432000, 0);
+	BOOST_CHECK (!markers->equals(markers2, dcp::EqualityOptions(), [](dcp::NoteType, string) {}));
 }

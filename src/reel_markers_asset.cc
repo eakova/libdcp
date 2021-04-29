@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2019 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2019-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,34 +31,46 @@
     files in the program, then also delete it here.
 */
 
-#include "reel_markers_asset.h"
-#include "raw_convert.h"
+
+/** @file  src/reel_markers_asset.cc
+ *  @brief ReelMarkersAsset class
+ */
+
+
 #include "dcp_assert.h"
+#include "raw_convert.h"
+#include "reel_markers_asset.h"
+#include "warnings.h"
+LIBDCP_DISABLE_WARNINGS
 #include <libxml++/libxml++.h>
-#include <boost/foreach.hpp>
+LIBDCP_ENABLE_WARNINGS
+
 
 using std::string;
 using std::map;
 using std::max;
 using boost::optional;
-using boost::shared_ptr;
+using std::shared_ptr;
 using namespace dcp;
 
-ReelMarkersAsset::ReelMarkersAsset (Fraction edit_rate, int64_t entry_point)
-	: ReelAsset (make_uuid(), edit_rate, 0, entry_point)
+
+ReelMarkersAsset::ReelMarkersAsset (Fraction edit_rate, int64_t intrinsic_duration, int64_t entry_point)
+	: ReelAsset (make_uuid(), edit_rate, intrinsic_duration, entry_point)
 {
 
 }
+
 
 ReelMarkersAsset::ReelMarkersAsset (cxml::ConstNodePtr node)
 	: ReelAsset (node)
 {
-	cxml::ConstNodePtr list = node->node_child ("MarkerList");
+	auto list = node->node_child ("MarkerList");
 	DCP_ASSERT (list);
-	BOOST_FOREACH (cxml::ConstNodePtr i, list->node_children("Marker")) {
+	for (auto i: list->node_children("Marker")) {
 		set (marker_from_string(i->string_child("Label")), dcp::Time(i->number_child<int64_t>("Offset"), edit_rate().as_float(), edit_rate().numerator));
 	}
 }
+
 
 string
 ReelMarkersAsset::cpl_node_name (Standard) const
@@ -66,51 +78,42 @@ ReelMarkersAsset::cpl_node_name (Standard) const
 	return "MainMarkers";
 }
 
+
 void
 ReelMarkersAsset::set (Marker m, Time t)
 {
 	_markers[m] = t;
-	update_duration ();
 }
+
 
 void
 ReelMarkersAsset::unset (Marker m)
 {
 	_markers.erase (m);
-	update_duration ();
 }
+
 
 optional<Time>
 ReelMarkersAsset::get (Marker m) const
 {
-	map<Marker, Time>::const_iterator i = _markers.find (m);
+	auto i = _markers.find (m);
 	if (i == _markers.end ()) {
-		return optional<Time>();
+		return {};
 	}
 	return i->second;
 }
 
-void
-ReelMarkersAsset::update_duration ()
-{
-	int const tcr = edit_rate().numerator / edit_rate().denominator;
-	_intrinsic_duration = 0;
-	for (map<Marker, Time>::const_iterator i = _markers.begin(); i != _markers.end(); ++i) {
-		_intrinsic_duration = max(_intrinsic_duration, i->second.as_editable_units(tcr));
-	}
-	_duration = _intrinsic_duration;
-}
 
 xmlpp::Node*
 ReelMarkersAsset::write_to_cpl (xmlpp::Node* node, Standard standard) const
 {
 	int const tcr = edit_rate().numerator / edit_rate().denominator;
-	xmlpp::Node* asset = write_to_cpl_base (node, standard, optional<string>());
-	xmlpp::Node* ml = asset->add_child("MarkerList");
-	for (map<Marker, Time>::const_iterator i = _markers.begin(); i != _markers.end(); ++i) {
-		xmlpp::Node* m = ml->add_child("Marker");
-		m->add_child("Label")->add_child_text (marker_to_string(i->first));
-		m->add_child("Offset")->add_child_text (raw_convert<string>(i->second.as_editable_units(tcr)));
+	auto asset = ReelAsset::write_to_cpl (node, standard);
+	auto ml = asset->add_child("MarkerList");
+	for (auto const& i: _markers) {
+		auto m = ml->add_child("Marker");
+		m->add_child("Label")->add_child_text(marker_to_string(i.first));
+		m->add_child("Offset")->add_child_text(raw_convert<string>(i.second.as_editable_units_ceil(tcr)));
 	}
 
 	return asset;
@@ -123,16 +126,16 @@ ReelMarkersAsset::equals (shared_ptr<const ReelMarkersAsset> other, EqualityOpti
 		return false;
 	}
 
-	if (get(FFOC) != other->get(FFOC) ||
-	    get(LFOC) != other->get(LFOC) ||
-	    get(FFTC) != other->get(FFTC) ||
-	    get(LFTC) != other->get(LFTC) ||
-	    get(FFOI) != other->get(FFOI) ||
-	    get(LFOI) != other->get(LFOI) ||
-	    get(FFEC) != other->get(FFEC) ||
-	    get(LFEC) != other->get(LFEC) ||
-	    get(FFMC) != other->get(FFMC) ||
-	    get(LFMC) != other->get(LFMC)) {
+	if (get(Marker::FFOC) != other->get(Marker::FFOC) ||
+	    get(Marker::LFOC) != other->get(Marker::LFOC) ||
+	    get(Marker::FFTC) != other->get(Marker::FFTC) ||
+	    get(Marker::LFTC) != other->get(Marker::LFTC) ||
+	    get(Marker::FFOI) != other->get(Marker::FFOI) ||
+	    get(Marker::LFOI) != other->get(Marker::LFOI) ||
+	    get(Marker::FFEC) != other->get(Marker::FFEC) ||
+	    get(Marker::LFEC) != other->get(Marker::LFEC) ||
+	    get(Marker::FFMC) != other->get(Marker::FFMC) ||
+	    get(Marker::LFMC) != other->get(Marker::LFMC)) {
 		return false;
 	}
 

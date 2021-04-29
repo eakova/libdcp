@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2015 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,6 +31,12 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/picture_asset.cc
+ *  @brief PictureAsset class
+ */
+
+
 #include "picture_asset.h"
 #include "util.h"
 #include "exceptions.h"
@@ -38,7 +44,7 @@
 #include "picture_asset_writer.h"
 #include "dcp_assert.h"
 #include "compose.hpp"
-#include "j2k.h"
+#include "j2k_transcode.h"
 #include <asdcp/AS_DCP.h>
 #include <asdcp/KM_fileio.h>
 #include <libxml++/nodes/element.h>
@@ -46,16 +52,17 @@
 #include <list>
 #include <stdexcept>
 
+
 using std::string;
 using std::list;
 using std::vector;
 using std::max;
 using std::pair;
 using std::make_pair;
-using boost::shared_ptr;
+using std::shared_ptr;
 using namespace dcp;
 
-/** Load a PictureAsset from a file */
+
 PictureAsset::PictureAsset (boost::filesystem::path file)
 	: Asset (file)
 	, _intrinsic_duration (0)
@@ -63,7 +70,7 @@ PictureAsset::PictureAsset (boost::filesystem::path file)
 
 }
 
-/** Create a new PictureAsset with a given edit rate and standard */
+
 PictureAsset::PictureAsset (Fraction edit_rate, Standard standard)
 	: MXF (standard)
 	, _edit_rate (edit_rate)
@@ -71,6 +78,7 @@ PictureAsset::PictureAsset (Fraction edit_rate, Standard standard)
 {
 
 }
+
 
 void
 PictureAsset::read_picture_descriptor (ASDCP::JP2K::PictureDescriptor const & desc)
@@ -82,6 +90,7 @@ PictureAsset::read_picture_descriptor (ASDCP::JP2K::PictureDescriptor const & de
 	_frame_rate = Fraction (desc.SampleRate.Numerator, desc.SampleRate.Denominator);
 	_screen_aspect_ratio = Fraction (desc.AspectRatio.Numerator, desc.AspectRatio.Denominator);
 }
+
 
 bool
 PictureAsset::descriptor_equals (
@@ -108,12 +117,12 @@ PictureAsset::descriptor_equals (
 //		a.QuantizationDefault != b.QuantizationDefault
 		) {
 
-		note (DCP_ERROR, "video MXF picture descriptors differ");
+		note (NoteType::ERROR, "video MXF picture descriptors differ");
 		return false;
 	}
 
 	if (a.ContainerDuration != b.ContainerDuration) {
-		note (DCP_ERROR, "video container durations differ");
+		note (NoteType::ERROR, "video container durations differ");
 	}
 
 //		for (unsigned int j = 0; j < ASDCP::JP2K::MaxComponents; ++j) {
@@ -125,6 +134,7 @@ PictureAsset::descriptor_equals (
 	return true;
 }
 
+
 bool
 PictureAsset::frame_buffer_equals (
 	int frame, EqualityOptions opt, NoteHandler note,
@@ -132,14 +142,14 @@ PictureAsset::frame_buffer_equals (
 	) const
 {
 	if (size_A == size_B && memcmp (data_A, data_B, size_A) == 0) {
-		note (DCP_NOTE, "J2K identical");
+		note (NoteType::NOTE, "J2K identical");
 		/* Easy result; the J2K data is identical */
 		return true;
 	}
 
 	/* Decompress the images to bitmaps */
-	shared_ptr<OpenJPEGImage> image_A = decompress_j2k (const_cast<uint8_t*> (data_A), size_A, 0);
-	shared_ptr<OpenJPEGImage> image_B = decompress_j2k (const_cast<uint8_t*> (data_B), size_B, 0);
+	auto image_A = decompress_j2k (const_cast<uint8_t*>(data_A), size_A, 0);
+	auto image_B = decompress_j2k (const_cast<uint8_t*>(data_B), size_B, 0);
 
 	/* Compare them */
 
@@ -150,7 +160,7 @@ PictureAsset::frame_buffer_equals (
 	for (int c = 0; c < 3; ++c) {
 
 		if (image_A->size() != image_B->size()) {
-			note (DCP_ERROR, String::compose ("image sizes for frame %1 differ", frame));
+			note (NoteType::ERROR, String::compose ("image sizes for frame %1 differ", frame));
 			return false;
 		}
 
@@ -170,17 +180,17 @@ PictureAsset::frame_buffer_equals (
 	double const mean = double (total) / abs_diffs.size ();
 
 	uint64_t total_squared_deviation = 0;
-	for (vector<int>::iterator j = abs_diffs.begin(); j != abs_diffs.end(); ++j) {
-		total_squared_deviation += pow (*j - mean, 2);
+	for (auto j: abs_diffs) {
+		total_squared_deviation += pow (j - mean, 2);
 	}
 
-	double const std_dev = sqrt (double (total_squared_deviation) / abs_diffs.size());
+	auto const std_dev = sqrt (double (total_squared_deviation) / abs_diffs.size());
 
-	note (DCP_NOTE, String::compose ("mean difference %1 deviation %2", mean, std_dev));
+	note (NoteType::NOTE, String::compose("mean difference %1 deviation %2", mean, std_dev));
 
 	if (mean > opt.max_mean_pixel_error) {
 		note (
-			DCP_ERROR,
+			NoteType::ERROR,
 			String::compose ("mean %1 out of range %2 in frame %3", mean, opt.max_mean_pixel_error, frame)
 			);
 
@@ -189,7 +199,7 @@ PictureAsset::frame_buffer_equals (
 
 	if (std_dev > opt.max_std_dev_pixel_error) {
 		note (
-			DCP_ERROR,
+			NoteType::ERROR,
 			String::compose ("standard deviation %1 out of range %2 in frame %3", std_dev, opt.max_std_dev_pixel_error, frame)
 			);
 
@@ -199,18 +209,20 @@ PictureAsset::frame_buffer_equals (
 	return true;
 }
 
+
 string
 PictureAsset::static_pkl_type (Standard standard)
 {
 	switch (standard) {
-	case INTEROP:
+	case Standard::INTEROP:
 		return "application/x-smpte-mxf;asdcpKind=Picture";
-	case SMPTE:
+	case Standard::SMPTE:
 		return "application/mxf";
 	default:
 		DCP_ASSERT (false);
 	}
 }
+
 
 string
 PictureAsset::pkl_type (Standard standard) const

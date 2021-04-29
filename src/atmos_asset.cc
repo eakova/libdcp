@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2016 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2016-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,42 +31,51 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/atmos_asset.cc
+ *  @brief AtmosAsset class
+ */
+
+
 #include "atmos_asset.h"
 #include "atmos_asset_reader.h"
 #include "atmos_asset_writer.h"
 #include "exceptions.h"
 #include <asdcp/AS_DCP.h>
 
+
 using std::string;
-using boost::shared_ptr;
+using std::shared_ptr;
+using std::make_shared;
 using namespace dcp;
 
-AtmosAsset::AtmosAsset (Fraction edit_rate, int first_frame, int max_channel_count, int max_object_count, string atmos_id, int atmos_version)
-	: MXF (SMPTE)
+
+AtmosAsset::AtmosAsset (Fraction edit_rate, int first_frame, int max_channel_count, int max_object_count, int atmos_version)
+	: MXF (Standard::SMPTE)
 	, _edit_rate (edit_rate)
-	, _intrinsic_duration (0)
 	, _first_frame (first_frame)
 	, _max_channel_count (max_channel_count)
 	, _max_object_count (max_object_count)
-	, _atmos_id (atmos_id)
+	, _atmos_id (make_uuid())
 	, _atmos_version (atmos_version)
 {
 
 }
 
+
 AtmosAsset::AtmosAsset (boost::filesystem::path file)
 	: Asset (file)
-	, MXF (SMPTE)
+	, MXF (Standard::SMPTE)
 {
 	ASDCP::ATMOS::MXFReader reader;
-	Kumu::Result_t r = reader.OpenRead (file.string().c_str());
+	auto r = reader.OpenRead (file.string().c_str());
 	if (ASDCP_FAILURE (r)) {
-		boost::throw_exception (MXFFileError ("could not open MXF file for reading", file.string(), r));
+		boost::throw_exception (MXFFileError("could not open MXF file for reading", file.string(), r));
 	}
 
 	ASDCP::ATMOS::AtmosDescriptor desc;
 	if (ASDCP_FAILURE (reader.FillAtmosDescriptor (desc))) {
-		boost::throw_exception (DCPReadError ("could not read Atmos MXF information"));
+		boost::throw_exception (ReadError("could not read Atmos MXF information"));
 	}
 
 	_edit_rate = Fraction (desc.EditRate.Numerator, desc.EditRate.Denominator);
@@ -76,11 +85,19 @@ AtmosAsset::AtmosAsset (boost::filesystem::path file)
 	_max_object_count = desc.MaxObjectCount;
 
 	char id[64];
-	Kumu::bin2UUIDhex (desc.AtmosID, ASDCP::UUIDlen, id, sizeof (id));
+	Kumu::bin2UUIDhex (desc.AtmosID, ASDCP::UUIDlen, id, sizeof(id));
 	_atmos_id = id;
 
 	_atmos_version = desc.AtmosVersion;
+
+	ASDCP::WriterInfo info;
+	if (ASDCP_FAILURE (reader.FillWriterInfo(info))) {
+		boost::throw_exception (ReadError ("could not read audio MXF information"));
+	}
+
+	_id = read_writer_info (info);
 }
+
 
 string
 AtmosAsset::static_pkl_type (Standard)
@@ -88,14 +105,18 @@ AtmosAsset::static_pkl_type (Standard)
 	return "application/mxf";
 }
 
+
 shared_ptr<AtmosAssetReader>
 AtmosAsset::start_read () const
 {
-	return shared_ptr<AtmosAssetReader> (new AtmosAssetReader (this, key(), SMPTE));
+	/* Can't use make_shared here since the constructor is protected */
+	return shared_ptr<AtmosAssetReader>(new AtmosAssetReader(this, key(), Standard::SMPTE));
 }
+
 
 shared_ptr<AtmosAssetWriter>
 AtmosAsset::start_write (boost::filesystem::path file)
 {
-	return shared_ptr<AtmosAssetWriter> (new AtmosAssetWriter (this, file));
+	/* Can't use make_shared here since the constructor is protected */
+	return shared_ptr<AtmosAssetWriter>(new AtmosAssetWriter(this, file));
 }

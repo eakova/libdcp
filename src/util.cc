@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2014 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,11 +31,14 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/util.cc
- *  @brief Utility methods.
+ *  @brief Utility methods and classes
  */
 
+
 #include "util.h"
+#include "language_tag.h"
 #include "exceptions.h"
 #include "types.h"
 #include "certificate.h"
@@ -53,32 +56,39 @@
 #include <libxml++/nodes/element.h>
 #include <libxml++/document.h>
 #include <openssl/sha.h>
-#include <boost/filesystem.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/foreach.hpp>
+#if BOOST_VERSION >= 106100
+#include <boost/dll/runtime_symbol_info.hpp>
+#endif
+#include <boost/filesystem.hpp>
 #include <stdexcept>
 #include <iostream>
 #include <iomanip>
+
 
 using std::string;
 using std::wstring;
 using std::cout;
 using std::min;
 using std::max;
-using std::list;
 using std::setw;
 using std::setfill;
 using std::ostream;
-using boost::shared_ptr;
+using std::shared_ptr;
+using std::vector;
 using boost::shared_array;
 using boost::optional;
 using boost::function;
 using boost::algorithm::trim;
 using namespace dcp;
 
-/** Create a UUID.
- *  @return UUID.
+
+/* Some ASDCP objects store this as a *&, for reasons which are not
+ * at all clear, so we have to keep this around forever.
  */
+ASDCP::Dictionary const* dcp::asdcp_smpte_dict = nullptr;
+
+
 string
 dcp::make_uuid ()
 {
@@ -89,31 +99,27 @@ dcp::make_uuid ()
 	return string (buffer);
 }
 
+
 string
-dcp::make_digest (Data data)
+dcp::make_digest (ArrayData data)
 {
 	SHA_CTX sha;
 	SHA1_Init (&sha);
-	SHA1_Update (&sha, data.data().get(), data.size());
+	SHA1_Update (&sha, data.data(), data.size());
 	byte_t byte_buffer[SHA_DIGEST_LENGTH];
 	SHA1_Final (byte_buffer, &sha);
 	char digest[64];
 	return Kumu::base64encode (byte_buffer, SHA_DIGEST_LENGTH, digest, 64);
 }
 
-/** Create a digest for a file.
- *  @param filename File name.
- *  @param progress Optional progress reporting function.  The function will be called
- *  with a progress value between 0 and 1.
- *  @return Digest.
- */
+
 string
 dcp::make_digest (boost::filesystem::path filename, function<void (float)> progress)
 {
 	Kumu::FileReader reader;
-	Kumu::Result_t r = reader.OpenRead (filename.string().c_str ());
-	if (ASDCP_FAILURE (r)) {
-		boost::throw_exception (FileError ("could not open file to compute digest", filename, r));
+	auto r = reader.OpenRead (filename.string().c_str ());
+	if (ASDCP_FAILURE(r)) {
+		boost::throw_exception (FileError("could not open file to compute digest", filename, r));
 	}
 
 	SHA_CTX sha;
@@ -124,14 +130,14 @@ dcp::make_digest (boost::filesystem::path filename, function<void (float)> progr
 
 	Kumu::fsize_t done = 0;
 	Kumu::fsize_t const size = reader.Size ();
-	while (1) {
+	while (true) {
 		ui32_t read = 0;
-		Kumu::Result_t r = reader.Read (read_buffer.Data(), read_buffer.Capacity(), &read);
+		auto r = reader.Read (read_buffer.Data(), read_buffer.Capacity(), &read);
 
 		if (r == Kumu::RESULT_ENDOFFILE) {
 			break;
 		} else if (ASDCP_FAILURE (r)) {
-			boost::throw_exception (FileError ("could not read file to compute digest", filename, r));
+			boost::throw_exception (FileError("could not read file to compute digest", filename, r));
 		}
 
 		SHA1_Update (&sha, read_buffer.Data(), read);
@@ -149,9 +155,7 @@ dcp::make_digest (boost::filesystem::path filename, function<void (float)> progr
 	return Kumu::base64encode (byte_buffer, SHA_DIGEST_LENGTH, digest, 64);
 }
 
-/** @param s A string.
- *  @return true if the string contains only space, newline or tab characters, or is empty.
- */
+
 bool
 dcp::empty_or_white_space (string s)
 {
@@ -164,19 +168,17 @@ dcp::empty_or_white_space (string s)
 	return true;
 }
 
-/** Set up various bits that the library needs.  Should be called one
- *  by client applications.
- */
+
 void
-dcp::init ()
+dcp::init (optional<boost::filesystem::path> tags_directory)
 {
 	if (xmlSecInit() < 0) {
 		throw MiscError ("could not initialise xmlsec");
 	}
 
 #ifdef XMLSEC_CRYPTO_DYNAMIC_LOADING
-	if (xmlSecCryptoDLLoadLibrary(BAD_CAST XMLSEC_CRYPTO) < 0) {
-		throw MiscError ("unable to load default xmlsec-crypto library");
+	if (xmlSecCryptoDLLoadLibrary(BAD_CAST "openssl") < 0) {
+		throw MiscError ("unable to load openssl xmlsec-crypto library");
 	}
 #endif
 
@@ -189,21 +191,21 @@ dcp::init ()
 	}
 
 	OpenSSL_add_all_algorithms();
+
+	asdcp_smpte_dict = &ASDCP::DefaultSMPTEDict();
+
+	if (!tags_directory) {
+		tags_directory = resources_directory() / "tags";
+	}
+
+	load_language_tag_lists (*tags_directory);
 }
 
-/** Decode a base64 string.  The base64 decode routine in KM_util.cpp
- *  gives different values to both this and the command-line base64
- *  for some inputs.  Not sure why.
- *
- *  @param in base64-encoded string.
- *  @param out Output buffer.
- *  @param out_length Length of output buffer.
- *  @return Number of characters written to the output buffer.
- */
+
 int
 dcp::base64_decode (string const & in, unsigned char* out, int out_length)
 {
-	BIO* b64 = BIO_new (BIO_f_base64 ());
+	auto b64 = BIO_new (BIO_f_base64());
 
 	/* This means the input should have no newlines */
 	BIO_set_flags (b64, BIO_FLAGS_BASE64_NO_NL);
@@ -217,7 +219,7 @@ dcp::base64_decode (string const & in, unsigned char* out, int out_length)
 		}
 	}
 
-	BIO* bmem = BIO_new_mem_buf (in_buffer, p - in_buffer);
+	auto bmem = BIO_new_mem_buf (in_buffer, p - in_buffer);
 	bmem = BIO_push (b64, bmem);
 	int const N = BIO_read (bmem, out, out_length);
 	BIO_free_all (bmem);
@@ -225,14 +227,7 @@ dcp::base64_decode (string const & in, unsigned char* out, int out_length)
 	return N;
 }
 
-/** @param p Path to open.
- *  @param t mode flags, as for fopen(3).
- *  @return FILE pointer or 0 on error.
- *
- *  Apparently there is no way to create an ofstream using a UTF-8
- *  filename under Windows.  We are hence reduced to using fopen
- *  with this wrapper.
- */
+
 FILE *
 dcp::fopen_boost (boost::filesystem::path p, string t)
 {
@@ -245,28 +240,30 @@ dcp::fopen_boost (boost::filesystem::path p, string t)
 #endif
 }
 
+
 optional<boost::filesystem::path>
 dcp::relative_to_root (boost::filesystem::path root, boost::filesystem::path file)
 {
-	boost::filesystem::path::const_iterator i = root.begin ();
-	boost::filesystem::path::const_iterator j = file.begin ();
+	auto i = root.begin ();
+	auto j = file.begin ();
 
 	while (i != root.end() && j != file.end() && *i == *j) {
 		++i;
 		++j;
 	}
 
-	if (i != root.end ()) {
-		return optional<boost::filesystem::path> ();
+	if (i != root.end()) {
+		return {};
 	}
 
 	boost::filesystem::path rel;
-	while (j != file.end ()) {
+	while (j != file.end()) {
 		rel /= *j++;
 	}
 
 	return rel;
 }
+
 
 bool
 dcp::ids_equal (string a, string b)
@@ -278,15 +275,16 @@ dcp::ids_equal (string a, string b)
 	return a == b;
 }
 
+
 string
 dcp::file_to_string (boost::filesystem::path p, uintmax_t max_length)
 {
-	uintmax_t len = boost::filesystem::file_size (p);
+	auto len = boost::filesystem::file_size (p);
 	if (len > max_length) {
-		throw MiscError (String::compose ("Unexpectedly long file (%1)", p.string()));
+		throw MiscError (String::compose("Unexpectedly long file (%1)", p.string()));
 	}
 
-	FILE* f = fopen_boost (p, "r");
+	auto f = fopen_boost (p, "r");
 	if (!f) {
 		throw FileError ("could not open file", p, errno);
 	}
@@ -302,9 +300,7 @@ dcp::file_to_string (boost::filesystem::path p, uintmax_t max_length)
 	return s;
 }
 
-/** @param key RSA private key in PEM format (optionally with -----BEGIN... / -----END...)
- *  @return SHA1 fingerprint of key
- */
+
 string
 dcp::private_key_fingerprint (string key)
 {
@@ -324,11 +320,12 @@ dcp::private_key_fingerprint (string key)
 	return Kumu::base64encode (digest, 20, digest_base64, 64);
 }
 
+
 xmlpp::Node *
 dcp::find_child (xmlpp::Node const * node, string name)
 {
-	xmlpp::Node::NodeList c = node->get_children ();
-	xmlpp::Node::NodeList::iterator i = c.begin();
+	auto c = node->get_children ();
+	auto i = c.begin();
 	while (i != c.end() && (*i)->get_name() != name) {
 		++i;
 	}
@@ -337,6 +334,7 @@ dcp::find_child (xmlpp::Node const * node, string name)
 	return *i;
 }
 
+
 string
 dcp::remove_urn_uuid (string raw)
 {
@@ -344,11 +342,13 @@ dcp::remove_urn_uuid (string raw)
 	return raw.substr (9);
 }
 
+
 string
 dcp::openjpeg_version ()
 {
 	return opj_version ();
 }
+
 
 string
 dcp::spaces (int n)
@@ -360,12 +360,13 @@ dcp::spaces (int n)
 	return s;
 }
 
+
 void
 dcp::indent (xmlpp::Element* element, int initial)
 {
-	xmlpp::Node* last = 0;
-	BOOST_FOREACH (xmlpp::Node * n, element->get_children()) {
-		xmlpp::Element* e = dynamic_cast<xmlpp::Element*>(n);
+	xmlpp::Node* last = nullptr;
+	for (auto n: element->get_children()) {
+		auto e = dynamic_cast<xmlpp::Element*>(n);
 		if (e) {
 			element->add_child_text_before (e, "\n" + spaces(initial + 2));
 			indent (e, initial + 2);
@@ -376,3 +377,94 @@ dcp::indent (xmlpp::Element* element, int initial)
 		element->add_child_text (last, "\n" + spaces(initial));
 	}
 }
+
+
+bool
+dcp::day_less_than_or_equal (LocalTime a, LocalTime b)
+{
+	if (a.year() != b.year()) {
+		return a.year() < b.year();
+	}
+
+	if (a.month() != b.month()) {
+		return a.month() < b.month();
+	}
+
+	return a.day() <= b.day();
+}
+
+
+bool
+dcp::day_greater_than_or_equal (LocalTime a, LocalTime b)
+{
+	if (a.year() != b.year()) {
+		return a.year() > b.year();
+	}
+
+	if (a.month() != b.month()) {
+		return a.month() > b.month();
+	}
+
+	return a.day() >= b.day();
+}
+
+
+string
+dcp::unique_string (vector<string> existing, string base)
+{
+	int const max_tries = existing.size() + 1;
+	for (int i = 0; i < max_tries; ++i) {
+		string trial = String::compose("%1%2", base, i);
+		if (find(existing.begin(), existing.end(), trial) == existing.end()) {
+			return trial;
+		}
+	}
+
+	DCP_ASSERT (false);
+}
+
+
+ASDCPErrorSuspender::ASDCPErrorSuspender ()
+	: _old (Kumu::DefaultLogSink())
+{
+	_sink = new Kumu::EntryListLogSink(_log);
+	Kumu::SetDefaultLogSink (_sink);
+}
+
+
+ASDCPErrorSuspender::~ASDCPErrorSuspender ()
+{
+	Kumu::SetDefaultLogSink (&_old);
+	delete _sink;
+}
+
+
+boost::filesystem::path dcp::directory_containing_executable ()
+{
+#if BOOST_VERSION >= 106100
+	return boost::filesystem::canonical(boost::dll::program_location().parent_path());
+#else
+	char buffer[PATH_MAX];
+	ssize_t N = readlink ("/proc/self/exe", buffer, PATH_MAX);
+	return boost::filesystem::path(string(buffer, N)).parent_path();
+#endif
+}
+
+
+boost::filesystem::path dcp::resources_directory ()
+{
+#if defined(LIBDCP_OSX)
+	return directory_containing_executable().parent_path() / "Resources";
+#elif defined(LIBDCP_WINDOWS)
+	return directory_containing_executable().parent_path();
+#else
+	/* We need a way to specify the tags directory for running un-installed binaries */
+	char* prefix = getenv("LIBDCP_RESOURCES");
+	if (prefix) {
+		return prefix;
+	}
+	return directory_containing_executable().parent_path() / "share" / "libdcp";
+#endif
+}
+
+

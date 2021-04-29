@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2014-2015 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2014-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,33 +31,41 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/reel_sound_asset.cc
- *  @brief ReelSoundAsset class.
+ *  @brief ReelSoundAsset class
  */
 
-#include "reel_sound_asset.h"
+
 #include "dcp_assert.h"
+#include "reel_sound_asset.h"
+#include "warnings.h"
 #include <libcxml/cxml.h>
+LIBDCP_DISABLE_WARNINGS
 #include <libxml++/libxml++.h>
+LIBDCP_ENABLE_WARNINGS
+
 
 using std::string;
-using boost::shared_ptr;
+using std::shared_ptr;
+using boost::optional;
 using namespace dcp;
 
+
 ReelSoundAsset::ReelSoundAsset (shared_ptr<SoundAsset> asset, int64_t entry_point)
-	: ReelAsset (asset->id(), asset->edit_rate(), asset->intrinsic_duration(), entry_point)
-	, ReelMXF (asset, asset->key_id())
+	: ReelFileAsset (asset, asset->key_id(), asset->id(), asset->edit_rate(), asset->intrinsic_duration(), entry_point)
 {
 
 }
 
+
 ReelSoundAsset::ReelSoundAsset (shared_ptr<const cxml::Node> node)
-	: ReelAsset (node)
-	, ReelMXF (node)
+	: ReelFileAsset (node)
 {
 	node->ignore_child ("Language");
 	node->done ();
 }
+
 
 string
 ReelSoundAsset::cpl_node_name (Standard) const
@@ -65,25 +73,13 @@ ReelSoundAsset::cpl_node_name (Standard) const
 	return "MainSound";
 }
 
-string
+
+optional<string>
 ReelSoundAsset::key_type () const
 {
-	return "MDAK";
+	return string("MDAK");
 }
 
-xmlpp::Node *
-ReelSoundAsset::write_to_cpl (xmlpp::Node* node, Standard standard) const
-{
-	xmlpp::Node* asset = write_to_cpl_base (node, standard, hash());
-
-        if (key_id ()) {
-		/* Find <Hash> */
-		xmlpp::Node* hash = find_child (asset, "Hash");
-		asset->add_child_before(hash, "KeyId")->add_child_text("urn:uuid:" + key_id().get());
-        }
-
-	return asset;
-}
 
 bool
 ReelSoundAsset::equals (shared_ptr<const ReelSoundAsset> other, EqualityOptions opt, NoteHandler note) const
@@ -91,7 +87,7 @@ ReelSoundAsset::equals (shared_ptr<const ReelSoundAsset> other, EqualityOptions 
 	if (!asset_equals (other, opt, note)) {
 		return false;
 	}
-	if (!mxf_equals (other, opt, note)) {
+	if (!file_asset_equals (other, opt, note)) {
 		return false;
 	}
 

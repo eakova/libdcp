@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2015 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,40 +31,49 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/dcp.cc
- *  @brief DCP class.
+ *  @brief DCP class
  */
 
-#include "raw_convert.h"
-#include "dcp.h"
-#include "sound_asset.h"
+
+#include "asset_factory.h"
 #include "atmos_asset.h"
-#include "picture_asset.h"
-#include "interop_subtitle_asset.h"
-#include "smpte_subtitle_asset.h"
-#include "mono_picture_asset.h"
-#include "stereo_picture_asset.h"
-#include "reel_subtitle_asset.h"
-#include "util.h"
-#include "metadata.h"
-#include "exceptions.h"
-#include "cpl.h"
 #include "certificate_chain.h"
 #include "compose.hpp"
+#include "cpl.h"
+#include "dcp.h"
+#include "dcp_assert.h"
 #include "decrypted_kdm.h"
 #include "decrypted_kdm_key.h"
-#include "dcp_assert.h"
-#include "reel_asset.h"
+#include "exceptions.h"
 #include "font_asset.h"
+#include "interop_subtitle_asset.h"
+#include "metadata.h"
+#include "mono_picture_asset.h"
+#include "picture_asset.h"
 #include "pkl.h"
-#include "asset_factory.h"
+#include "raw_convert.h"
+#include "reel_asset.h"
+#include "reel_subtitle_asset.h"
+#include "smpte_subtitle_asset.h"
+#include "sound_asset.h"
+#include "stereo_picture_asset.h"
+#include "util.h"
+#include "verify.h"
+#include "warnings.h"
+LIBDCP_DISABLE_WARNINGS
 #include <asdcp/AS_DCP.h>
+LIBDCP_ENABLE_WARNINGS
 #include <xmlsec/xmldsig.h>
 #include <xmlsec/app.h>
+LIBDCP_DISABLE_WARNINGS
 #include <libxml++/libxml++.h>
+LIBDCP_ENABLE_WARNINGS
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/foreach.hpp>
+#include <numeric>
+
 
 using std::string;
 using std::list;
@@ -73,17 +82,20 @@ using std::cout;
 using std::make_pair;
 using std::map;
 using std::cerr;
+using std::make_shared;
 using std::exception;
-using boost::shared_ptr;
-using boost::dynamic_pointer_cast;
+using std::shared_ptr;
+using std::dynamic_pointer_cast;
 using boost::optional;
 using boost::algorithm::starts_with;
 using namespace dcp;
+
 
 static string const assetmap_interop_ns = "http://www.digicine.com/PROTO-ASDCP-AM-20040311#";
 static string const assetmap_smpte_ns   = "http://www.smpte-ra.org/schemas/429-9/2007/AM";
 static string const volindex_interop_ns = "http://www.digicine.com/PROTO-ASDCP-VL-20040311#";
 static string const volindex_smpte_ns   = "http://www.smpte-ra.org/schemas/429-9/2007/AM";
+
 
 DCP::DCP (boost::filesystem::path directory)
 	: _directory (directory)
@@ -95,70 +107,57 @@ DCP::DCP (boost::filesystem::path directory)
 	_directory = boost::filesystem::canonical (_directory);
 }
 
-/** Call this instead of throwing an exception if the error can be tolerated */
-template<class T> void
-survivable_error (bool keep_going, dcp::DCP::ReadErrors* errors, T const & e)
-{
-	if (keep_going) {
-		if (errors) {
-			errors->push_back (shared_ptr<T> (new T (e)));
-		}
-	} else {
-		throw e;
-	}
-}
 
 void
-DCP::read (bool keep_going, ReadErrors* errors, bool ignore_incorrect_picture_mxf_type)
+DCP::read (vector<dcp::VerificationNote>* notes, bool ignore_incorrect_picture_mxf_type)
 {
 	/* Read the ASSETMAP and PKL */
 
-	boost::filesystem::path asset_map_file;
 	if (boost::filesystem::exists (_directory / "ASSETMAP")) {
-		asset_map_file = _directory / "ASSETMAP";
+		_asset_map = _directory / "ASSETMAP";
 	} else if (boost::filesystem::exists (_directory / "ASSETMAP.xml")) {
-		asset_map_file = _directory / "ASSETMAP.xml";
+		_asset_map = _directory / "ASSETMAP.xml";
 	} else {
-		boost::throw_exception (DCPReadError (String::compose ("could not find AssetMap file in `%1'", _directory.string())));
+		boost::throw_exception (MissingAssetmapError(_directory));
 	}
 
 	cxml::Document asset_map ("AssetMap");
 
-	asset_map.read_file (asset_map_file);
+	asset_map.read_file (_asset_map.get());
 	if (asset_map.namespace_uri() == assetmap_interop_ns) {
-		_standard = INTEROP;
+		_standard = Standard::INTEROP;
 	} else if (asset_map.namespace_uri() == assetmap_smpte_ns) {
-		_standard = SMPTE;
+		_standard = Standard::SMPTE;
 	} else {
 		boost::throw_exception (XMLError ("Unrecognised Assetmap namespace " + asset_map.namespace_uri()));
 	}
 
-	list<shared_ptr<cxml::Node> > asset_nodes = asset_map.node_child("AssetList")->node_children ("Asset");
+	auto asset_nodes = asset_map.node_child("AssetList")->node_children ("Asset");
 	map<string, boost::filesystem::path> paths;
-	list<boost::filesystem::path> pkl_paths;
-	BOOST_FOREACH (shared_ptr<cxml::Node> i, asset_nodes) {
+	vector<boost::filesystem::path> pkl_paths;
+	for (auto i: asset_nodes) {
 		if (i->node_child("ChunkList")->node_children("Chunk").size() != 1) {
 			boost::throw_exception (XMLError ("unsupported asset chunk count"));
 		}
-		string p = i->node_child("ChunkList")->node_child("Chunk")->string_child ("Path");
+		auto p = i->node_child("ChunkList")->node_child("Chunk")->string_child ("Path");
 		if (starts_with (p, "file://")) {
 			p = p.substr (7);
 		}
 		switch (*_standard) {
-		case INTEROP:
+		case Standard::INTEROP:
 			if (i->optional_node_child("PackingList")) {
 				pkl_paths.push_back (p);
 			} else {
-				paths.insert (make_pair (remove_urn_uuid (i->string_child ("Id")), p));
+				paths.insert (make_pair(remove_urn_uuid(i->string_child("Id")), p));
 			}
 			break;
-		case SMPTE:
+		case Standard::SMPTE:
 		{
-			optional<string> pkl_bool = i->optional_string_child("PackingList");
+			auto pkl_bool = i->optional_string_child("PackingList");
 			if (pkl_bool && *pkl_bool == "true") {
 				pkl_paths.push_back (p);
 			} else {
-				paths.insert (make_pair (remove_urn_uuid (i->string_child ("Id")), p));
+				paths.insert (make_pair(remove_urn_uuid(i->string_child("Id")), p));
 			}
 			break;
 		}
@@ -169,12 +168,12 @@ DCP::read (bool keep_going, ReadErrors* errors, bool ignore_incorrect_picture_mx
 		boost::throw_exception (XMLError ("No packing lists found in asset map"));
 	}
 
-	BOOST_FOREACH (boost::filesystem::path i, pkl_paths) {
-		_pkls.push_back (shared_ptr<PKL>(new PKL(_directory / i)));
+	for (auto i: pkl_paths) {
+		_pkls.push_back (make_shared<PKL>(_directory / i));
 	}
 
 	/* Now we have:
-	     paths - files in the DCP that are not PKLs.
+	     paths - map of files in the DCP that are not PKLs; key is ID, value is path.
 	     _pkls - PKL objects for each PKL.
 
 	   Read all the assets from the asset map.
@@ -183,104 +182,138 @@ DCP::read (bool keep_going, ReadErrors* errors, bool ignore_incorrect_picture_mx
 	/* Make a list of non-CPL/PKL assets so that we can resolve the references
 	   from the CPLs.
 	*/
-	list<shared_ptr<Asset> > other_assets;
+	vector<shared_ptr<Asset>> other_assets;
 
-	for (map<string, boost::filesystem::path>::const_iterator i = paths.begin(); i != paths.end(); ++i) {
-		boost::filesystem::path path = _directory / i->second;
+	for (auto i: paths) {
+		auto path = _directory / i.second;
 
-		if (i->second.empty()) {
+		if (i.second.empty()) {
 			/* I can't see how this is valid, but it's
 			   been seen in the wild with a DCP that
 			   claims to come from ClipsterDCI 5.10.0.5.
 			*/
-			survivable_error (keep_going, errors, EmptyAssetPathError(i->first));
+			if (notes) {
+				notes->push_back ({VerificationNote::Type::WARNING, VerificationNote::Code::EMPTY_ASSET_PATH});
+			}
+			continue;
 		}
 
-		if (i->second.empty() || !boost::filesystem::exists(path)) {
-			survivable_error (keep_going, errors, MissingAssetError (path));
+		if (!boost::filesystem::exists(path)) {
+			if (notes) {
+				notes->push_back ({VerificationNote::Type::ERROR, VerificationNote::Code::MISSING_ASSET, path});
+			}
 			continue;
 		}
 
 		/* Find the <Type> for this asset from the PKL that contains the asset */
 		optional<string> pkl_type;
-		BOOST_FOREACH (shared_ptr<PKL> j, _pkls) {
-			pkl_type = j->type(i->first);
+		for (auto j: _pkls) {
+			pkl_type = j->type(i.first);
 			if (pkl_type) {
 				break;
 			}
 		}
 
-		DCP_ASSERT (pkl_type);
+		if (!pkl_type) {
+			/* This asset is in the ASSETMAP but not mentioned in any PKL so we don't
+			 * need to worry about it.
+			 */
+			continue;
+		}
 
-		if (*pkl_type == CPL::static_pkl_type(*_standard) || *pkl_type == InteropSubtitleAsset::static_pkl_type(*_standard)) {
-			xmlpp::DomParser* p = new xmlpp::DomParser;
+		auto remove_parameters = [](string const& n) {
+			return n.substr(0, n.find(";"));
+		};
+
+		/* Remove any optional parameters (after ;) */
+		pkl_type = pkl_type->substr(0, pkl_type->find(";"));
+
+		if (
+			pkl_type == remove_parameters(CPL::static_pkl_type(*_standard)) ||
+			pkl_type == remove_parameters(InteropSubtitleAsset::static_pkl_type(*_standard))) {
+			auto p = new xmlpp::DomParser;
 			try {
 				p->parse_file (path.string());
 			} catch (std::exception& e) {
 				delete p;
-				throw DCPReadError(String::compose("XML error in %1", path.string()), e.what());
+				throw ReadError(String::compose("XML error in %1", path.string()), e.what());
 			}
 
-			string const root = p->get_document()->get_root_node()->get_name ();
+			auto const root = p->get_document()->get_root_node()->get_name();
 			delete p;
 
 			if (root == "CompositionPlaylist") {
-				shared_ptr<CPL> cpl (new CPL (path));
-				if (_standard && cpl->standard() && cpl->standard().get() != _standard.get()) {
-					survivable_error (keep_going, errors, MismatchedStandardError ());
+				auto cpl = make_shared<CPL>(path);
+				if (_standard && cpl->standard() != _standard.get() && notes) {
+					notes->push_back ({VerificationNote::Type::ERROR, VerificationNote::Code::MISMATCHED_STANDARD});
 				}
 				_cpls.push_back (cpl);
 			} else if (root == "DCSubtitle") {
-				if (_standard && _standard.get() == SMPTE) {
-					survivable_error (keep_going, errors, MismatchedStandardError ());
+				if (_standard && _standard.get() == Standard::SMPTE && notes) {
+					notes->push_back (VerificationNote(VerificationNote::Type::ERROR, VerificationNote::Code::MISMATCHED_STANDARD));
 				}
-				other_assets.push_back (shared_ptr<InteropSubtitleAsset> (new InteropSubtitleAsset (path)));
+				other_assets.push_back (make_shared<InteropSubtitleAsset>(path));
 			}
 		} else if (
-			*pkl_type == PictureAsset::static_pkl_type(*_standard) ||
-			*pkl_type == SoundAsset::static_pkl_type(*_standard) ||
-			*pkl_type == AtmosAsset::static_pkl_type(*_standard) ||
-			*pkl_type == SMPTESubtitleAsset::static_pkl_type(*_standard)
+			*pkl_type == remove_parameters(PictureAsset::static_pkl_type(*_standard)) ||
+			*pkl_type == remove_parameters(SoundAsset::static_pkl_type(*_standard)) ||
+			*pkl_type == remove_parameters(AtmosAsset::static_pkl_type(*_standard)) ||
+			*pkl_type == remove_parameters(SMPTESubtitleAsset::static_pkl_type(*_standard))
 			) {
 
-			other_assets.push_back (asset_factory(path, ignore_incorrect_picture_mxf_type));
-		} else if (*pkl_type == FontAsset::static_pkl_type(*_standard)) {
-			other_assets.push_back (shared_ptr<FontAsset> (new FontAsset (i->first, path)));
+			bool found_threed_marked_as_twod = false;
+			other_assets.push_back (asset_factory(path, ignore_incorrect_picture_mxf_type, &found_threed_marked_as_twod));
+			if (found_threed_marked_as_twod && notes) {
+				notes->push_back ({VerificationNote::Type::WARNING, VerificationNote::Code::THREED_ASSET_MARKED_AS_TWOD, path});
+			}
+		} else if (*pkl_type == remove_parameters(FontAsset::static_pkl_type(*_standard))) {
+			other_assets.push_back (make_shared<FontAsset>(i.first, path));
 		} else if (*pkl_type == "image/png") {
 			/* It's an Interop PNG subtitle; let it go */
 		} else {
-			throw DCPReadError (String::compose("Unknown asset type %1 in PKL", *pkl_type));
+			throw ReadError (String::compose("Unknown asset type %1 in PKL", *pkl_type));
 		}
 	}
 
-	BOOST_FOREACH (shared_ptr<CPL> i, cpls ()) {
-		i->resolve_refs (other_assets);
+	resolve_refs (other_assets);
+
+	/* While we've got the ASSETMAP lets look and see if this DCP refers to things that are not in its ASSETMAP */
+	if (notes) {
+		for (auto i: cpls()) {
+			for (auto j: i->reel_file_assets()) {
+				if (!j->asset_ref().resolved() && paths.find(j->asset_ref().id()) == paths.end()) {
+					notes->push_back (VerificationNote(VerificationNote::Type::WARNING, VerificationNote::Code::EXTERNAL_ASSET, j->asset_ref().id()));
+				}
+			}
+		}
 	}
 }
 
+
 void
-DCP::resolve_refs (list<shared_ptr<Asset> > assets)
+DCP::resolve_refs (vector<shared_ptr<Asset>> assets)
 {
-	BOOST_FOREACH (shared_ptr<CPL> i, cpls ()) {
+	for (auto i: cpls()) {
 		i->resolve_refs (assets);
 	}
 }
 
+
 bool
 DCP::equals (DCP const & other, EqualityOptions opt, NoteHandler note) const
 {
-	list<shared_ptr<CPL> > a = cpls ();
-	list<shared_ptr<CPL> > b = other.cpls ();
+	auto a = cpls ();
+	auto b = other.cpls ();
 
 	if (a.size() != b.size()) {
-		note (DCP_ERROR, String::compose ("CPL counts differ: %1 vs %2", a.size(), b.size()));
+		note (NoteType::ERROR, String::compose ("CPL counts differ: %1 vs %2", a.size(), b.size()));
 		return false;
 	}
 
 	bool r = true;
 
-	BOOST_FOREACH (shared_ptr<CPL> i, a) {
-		list<shared_ptr<CPL> >::const_iterator j = b.begin ();
+	for (auto i: a) {
+		auto j = b.begin();
 		while (j != b.end() && !(*j)->equals (i, opt, note)) {
 			++j;
 		}
@@ -293,17 +326,19 @@ DCP::equals (DCP const & other, EqualityOptions opt, NoteHandler note) const
 	return r;
 }
 
+
 void
-DCP::add (boost::shared_ptr<CPL> cpl)
+DCP::add (shared_ptr<CPL> cpl)
 {
 	_cpls.push_back (cpl);
 }
 
+
 bool
-DCP::encrypted () const
+DCP::any_encrypted () const
 {
-	BOOST_FOREACH (shared_ptr<CPL> i, cpls ()) {
-		if (i->encrypted ()) {
+	for (auto i: cpls()) {
+		if (i->any_encrypted()) {
 			return true;
 		}
 	}
@@ -311,17 +346,27 @@ DCP::encrypted () const
 	return false;
 }
 
-/** Add a KDM to decrypt this DCP.  This method must be called after DCP::read()
- *  or the KDM you specify will be ignored.
- *  @param kdm KDM to use.
- */
+
+bool
+DCP::all_encrypted () const
+{
+	for (auto i: cpls()) {
+		if (!i->all_encrypted()) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+
 void
 DCP::add (DecryptedKDM const & kdm)
 {
-	list<DecryptedKDMKey> keys = kdm.keys ();
+	auto keys = kdm.keys ();
 
-	BOOST_FOREACH (shared_ptr<CPL> i, cpls ()) {
-		BOOST_FOREACH (DecryptedKDMKey const & j, kdm.keys ()) {
+	for (auto i: cpls()) {
+		for (auto const& j: kdm.keys()) {
 			if (j.cpl_id() == i->id()) {
 				i->add (kdm);
 			}
@@ -329,18 +374,19 @@ DCP::add (DecryptedKDM const & kdm)
 	}
 }
 
+
 /** Write the VOLINDEX file.
  *  @param standard DCP standard to use (INTEROP or SMPTE)
  */
 void
 DCP::write_volindex (Standard standard) const
 {
-	boost::filesystem::path p = _directory;
+	auto p = _directory;
 	switch (standard) {
-	case INTEROP:
+	case Standard::INTEROP:
 		p /= "VOLINDEX";
 		break;
-	case SMPTE:
+	case Standard::SMPTE:
 		p /= "VOLINDEX.xml";
 		break;
 	default:
@@ -351,10 +397,10 @@ DCP::write_volindex (Standard standard) const
 	xmlpp::Element* root;
 
 	switch (standard) {
-	case INTEROP:
+	case Standard::INTEROP:
 		root = doc.create_root_node ("VolumeIndex", volindex_interop_ns);
 		break;
-	case SMPTE:
+	case Standard::SMPTE:
 		root = doc.create_root_node ("VolumeIndex", volindex_smpte_ns);
 		break;
 	default:
@@ -365,16 +411,20 @@ DCP::write_volindex (Standard standard) const
 	doc.write_to_file_formatted (p.string (), "UTF-8");
 }
 
+
 void
-DCP::write_assetmap (Standard standard, string pkl_uuid, boost::filesystem::path pkl_path, XMLMetadata metadata) const
+DCP::write_assetmap (
+	Standard standard, string pkl_uuid, boost::filesystem::path pkl_path,
+	string issuer, string creator, string issue_date, string annotation_text
+	) const
 {
-	boost::filesystem::path p = _directory;
+	auto p = _directory;
 
 	switch (standard) {
-	case INTEROP:
+	case Standard::INTEROP:
 		p /= "ASSETMAP";
 		break;
-	case SMPTE:
+	case Standard::SMPTE:
 		p /= "ASSETMAP.xml";
 		break;
 	default:
@@ -385,10 +435,10 @@ DCP::write_assetmap (Standard standard, string pkl_uuid, boost::filesystem::path
 	xmlpp::Element* root;
 
 	switch (standard) {
-	case INTEROP:
+	case Standard::INTEROP:
 		root = doc.create_root_node ("AssetMap", assetmap_interop_ns);
 		break;
-	case SMPTE:
+	case Standard::SMPTE:
 		root = doc.create_root_node ("AssetMap", assetmap_smpte_ns);
 		break;
 	default:
@@ -396,69 +446,82 @@ DCP::write_assetmap (Standard standard, string pkl_uuid, boost::filesystem::path
 	}
 
 	root->add_child("Id")->add_child_text ("urn:uuid:" + make_uuid());
-	root->add_child("AnnotationText")->add_child_text (metadata.annotation_text);
+	root->add_child("AnnotationText")->add_child_text (annotation_text);
 
 	switch (standard) {
-	case INTEROP:
+	case Standard::INTEROP:
 		root->add_child("VolumeCount")->add_child_text ("1");
-		root->add_child("IssueDate")->add_child_text (metadata.issue_date);
-		root->add_child("Issuer")->add_child_text (metadata.issuer);
-		root->add_child("Creator")->add_child_text (metadata.creator);
+		root->add_child("IssueDate")->add_child_text (issue_date);
+		root->add_child("Issuer")->add_child_text (issuer);
+		root->add_child("Creator")->add_child_text (creator);
 		break;
-	case SMPTE:
-		root->add_child("Creator")->add_child_text (metadata.creator);
+	case Standard::SMPTE:
+		root->add_child("Creator")->add_child_text (creator);
 		root->add_child("VolumeCount")->add_child_text ("1");
-		root->add_child("IssueDate")->add_child_text (metadata.issue_date);
-		root->add_child("Issuer")->add_child_text (metadata.issuer);
+		root->add_child("IssueDate")->add_child_text (issue_date);
+		root->add_child("Issuer")->add_child_text (issuer);
 		break;
 	default:
 		DCP_ASSERT (false);
 	}
 
-	xmlpp::Node* asset_list = root->add_child ("AssetList");
+	auto asset_list = root->add_child ("AssetList");
 
-	xmlpp::Node* asset = asset_list->add_child ("Asset");
+	auto asset = asset_list->add_child ("Asset");
 	asset->add_child("Id")->add_child_text ("urn:uuid:" + pkl_uuid);
 	asset->add_child("PackingList")->add_child_text ("true");
-	xmlpp::Node* chunk_list = asset->add_child ("ChunkList");
-	xmlpp::Node* chunk = chunk_list->add_child ("Chunk");
+	auto chunk_list = asset->add_child ("ChunkList");
+	auto chunk = chunk_list->add_child ("Chunk");
 	chunk->add_child("Path")->add_child_text (pkl_path.filename().string());
 	chunk->add_child("VolumeIndex")->add_child_text ("1");
 	chunk->add_child("Offset")->add_child_text ("0");
 	chunk->add_child("Length")->add_child_text (raw_convert<string> (boost::filesystem::file_size (pkl_path)));
 
-	BOOST_FOREACH (shared_ptr<Asset> i, assets ()) {
+	for (auto i: assets()) {
 		i->write_to_assetmap (asset_list, _directory);
 	}
 
 	doc.write_to_file_formatted (p.string (), "UTF-8");
+	_asset_map = p;
 }
 
-/** Write all the XML files for this DCP.
- *  @param standand INTEROP or SMPTE.
- *  @param metadata Metadata to use for PKL and asset map files.
- *  @param signer Signer to use, or 0.
- */
+
 void
 DCP::write_xml (
-	Standard standard,
-	XMLMetadata metadata,
+	string issuer,
+	string creator,
+	string issue_date,
+	string annotation_text,
 	shared_ptr<const CertificateChain> signer,
 	NameFormat name_format
 	)
 {
-	BOOST_FOREACH (shared_ptr<CPL> i, cpls ()) {
+	if (_cpls.empty()) {
+		throw MiscError ("Cannot write DCP with no CPLs.");
+	}
+
+	auto standard = std::accumulate (
+		std::next(_cpls.begin()), _cpls.end(), _cpls[0]->standard(),
+		[](Standard s, shared_ptr<CPL> c) {
+			if (s != c->standard()) {
+				throw MiscError ("Cannot make DCP with mixed Interop and SMPTE CPLs.");
+			}
+			return s;
+		}
+		);
+
+	for (auto i: cpls()) {
 		NameFormat::Map values;
 		values['t'] = "cpl";
-		i->write_xml (_directory / (name_format.get(values, "_" + i->id() + ".xml")), standard, signer);
+		i->write_xml (_directory / (name_format.get(values, "_" + i->id() + ".xml")), signer);
 	}
 
 	shared_ptr<PKL> pkl;
 
 	if (_pkls.empty()) {
-		pkl.reset (new PKL (standard, metadata.annotation_text, metadata.issue_date, metadata.issuer, metadata.creator));
+		pkl = make_shared<PKL>(standard, annotation_text, issue_date, issuer, creator);
 		_pkls.push_back (pkl);
-		BOOST_FOREACH (shared_ptr<Asset> i, assets ()) {
+		for (auto i: assets()) {
 			i->add_to_pkl (pkl, _directory);
 		}
         } else {
@@ -467,39 +530,48 @@ DCP::write_xml (
 
 	NameFormat::Map values;
 	values['t'] = "pkl";
-	boost::filesystem::path pkl_path = _directory / name_format.get(values, "_" + pkl->id() + ".xml");
+	auto pkl_path = _directory / name_format.get(values, "_" + pkl->id() + ".xml");
 	pkl->write (pkl_path, signer);
 
 	write_volindex (standard);
-	write_assetmap (standard, pkl->id(), pkl_path, metadata);
+	write_assetmap (standard, pkl->id(), pkl_path, issuer, creator, issue_date, annotation_text);
 }
 
-list<shared_ptr<CPL> >
+
+vector<shared_ptr<CPL>>
 DCP::cpls () const
 {
 	return _cpls;
 }
 
-/** @param ignore_unresolved true to silently ignore unresolved assets, otherwise
- *  an exception is thrown if they are found.
- *  @return All assets (including CPLs).
- */
-list<shared_ptr<Asset> >
+
+vector<shared_ptr<Asset>>
 DCP::assets (bool ignore_unresolved) const
 {
-	list<shared_ptr<Asset> > assets;
-	BOOST_FOREACH (shared_ptr<CPL> i, cpls ()) {
+	vector<shared_ptr<Asset>> assets;
+	for (auto i: cpls()) {
 		assets.push_back (i);
-		BOOST_FOREACH (shared_ptr<const ReelMXF> j, i->reel_mxfs()) {
+		for (auto j: i->reel_file_assets()) {
 			if (ignore_unresolved && !j->asset_ref().resolved()) {
 				continue;
 			}
-			shared_ptr<Asset> o = j->asset_ref().asset ();
-			assets.push_back (o);
-			/* More Interop special-casing */
-			shared_ptr<InteropSubtitleAsset> sub = dynamic_pointer_cast<InteropSubtitleAsset> (o);
-			if (sub) {
-				sub->add_font_assets (assets);
+
+			auto const id = j->asset_ref().id();
+			auto already_got = false;
+			for (auto k: assets) {
+				if (k->id() == id) {
+					already_got = true;
+				}
+			}
+
+			if (!already_got) {
+				auto o = j->asset_ref().asset();
+				assets.push_back (o);
+				/* More Interop special-casing */
+				auto sub = dynamic_pointer_cast<InteropSubtitleAsset>(o);
+				if (sub) {
+					sub->add_font_assets (assets);
+				}
 			}
 		}
 	}
@@ -507,12 +579,13 @@ DCP::assets (bool ignore_unresolved) const
 	return assets;
 }
 
+
 /** Given a list of files that make up 1 or more DCPs, return the DCP directories */
 vector<boost::filesystem::path>
 DCP::directories_from_files (vector<boost::filesystem::path> files)
 {
 	vector<boost::filesystem::path> d;
-	BOOST_FOREACH (boost::filesystem::path i, files) {
+	for (auto i: files) {
 		if (i.filename() == "ASSETMAP" || i.filename() == "ASSETMAP.xml") {
 			d.push_back (i.parent_path ());
 		}

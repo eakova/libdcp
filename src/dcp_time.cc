@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2016 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,9 +31,11 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/dcp_time.cc
- *  @brief Time class.
+ *  @brief Time class
  */
+
 
 #include "raw_convert.h"
 #include "dcp_time.h"
@@ -46,24 +48,23 @@
 #include <vector>
 #include <cmath>
 
+
 using namespace std;
 using namespace boost;
 using namespace dcp;
+
 
 Time::Time (int frame, double frames_per_second, int tcr_)
 {
 	set (double (frame) / frames_per_second, tcr_);
 }
 
-/** Construct a Time from a number of seconds and a timecode rate.
- *
- *  @param seconds A number of seconds.
- *  @param tcr_ Timecode rate.
- */
+
 Time::Time (double seconds, int tcr_)
 {
 	set (seconds, tcr_);
 }
+
 
 /** Construct a Time with specified timecode rate and using the supplied
  *  number of seconds.
@@ -94,21 +95,14 @@ Time::set (double seconds, int tcr_)
 	}
 }
 
-/** @param time String of the form
- *     HH:MM:SS:EE                          for SMPTE
- *     HH:MM:SS:E[E[E]] or HH:MM:SS.s[s[s]] for Interop
- *  where HH are hours, MM minutes, SS seconds, EE editable units and
- *  sss millseconds.
- *
- *  @param tcr_ Timecode rate if this is a SMPTE time, otherwise empty for an Interop time.
- */
+
 Time::Time (string time, optional<int> tcr_)
 {
 	vector<string> b;
 	split (b, time, is_any_of (":"));
 
 	if (b.size() < 3 || b[0].empty() || b[1].empty() || b[0].length() > 2 || b[1].length() > 2) {
-		boost::throw_exception (DCPReadError (String::compose ("unrecognised time specification %1", time)));
+		boost::throw_exception (ReadError (String::compose ("unrecognised time specification %1", time)));
 	}
 
 	if (!tcr_) {
@@ -118,17 +112,17 @@ Time::Time (string time, optional<int> tcr_)
 			vector<string> bs;
 			split (bs, b[2], is_any_of ("."));
 			if (bs.size() != 2) {
-				boost::throw_exception (DCPReadError (String::compose ("unrecognised time specification %1", time)));
+				boost::throw_exception (ReadError (String::compose ("unrecognised time specification %1", time)));
 			}
 
 			h = raw_convert<int> (b[0]);
 			m = raw_convert<int> (b[1]);
 			if (bs[0].empty() || bs[0].length() > 2) {
-				boost::throw_exception (DCPReadError (String::compose ("unrecognised time specification %1; %2 has bad length", time, bs[0])));
+				boost::throw_exception (ReadError (String::compose ("unrecognised time specification %1; %2 has bad length", time, bs[0])));
 			}
 			s = raw_convert<int> (bs[0]);
 			if (bs[1].empty() || bs[1].length() > 3) {
-				boost::throw_exception (DCPReadError (String::compose ("unrecognised time specification %1; %2 has bad length", time, bs[1])));
+				boost::throw_exception (ReadError (String::compose ("unrecognised time specification %1; %2 has bad length", time, bs[1])));
 			}
 			e = raw_convert<int> (bs[1]);
 			tcr = 1000;
@@ -137,38 +131,39 @@ Time::Time (string time, optional<int> tcr_)
 			h = raw_convert<int> (b[0]);
 			m = raw_convert<int> (b[1]);
 			if (b[2].empty() || b[2].length() > 2) {
-				boost::throw_exception (DCPReadError (String::compose ("unrecognised time specification %1; %2 has bad length", time, b[2])));
+				boost::throw_exception (ReadError (String::compose ("unrecognised time specification %1; %2 has bad length", time, b[2])));
 			}
 			s = raw_convert<int> (b[2]);
 			if (b[3].empty() || b[3].length() > 3) {
-				boost::throw_exception (DCPReadError (String::compose ("unrecognised time specification %1; %2 has bad length", time, b[3])));
+				boost::throw_exception (ReadError (String::compose ("unrecognised time specification %1; %2 has bad length", time, b[3])));
 			}
 			e = raw_convert<int> (b[3]);
 			tcr = 250;
 		} else {
-			boost::throw_exception (DCPReadError (String::compose ("unrecognised time specification %1", time)));
+			boost::throw_exception (ReadError (String::compose ("unrecognised time specification %1", time)));
 		}
 
 	} else {
 		/* SMPTE: HH:MM:SS:EE */
 		split (b, time, is_any_of (":"));
 		if (b.size() != 4) {
-			boost::throw_exception (DCPReadError (String::compose ("unrecognised time specification %1; does not have 4 parts", time)));
+			boost::throw_exception (ReadError (String::compose ("unrecognised time specification %1; does not have 4 parts", time)));
 		}
 
 		h = raw_convert<int> (b[0]);
 		m = raw_convert<int> (b[1]);
 		if (b[2].empty() || b[2].length() > 2) {
-			boost::throw_exception (DCPReadError (String::compose ("unrecognised time specification %1; %2 has bad length", time, b[2])));
+			boost::throw_exception (ReadError (String::compose ("unrecognised time specification %1; %2 has bad length", time, b[2])));
 		}
 		s = raw_convert<int> (b[2]);
 		if (b[3].empty() || b[3].length() > 2) {
-			boost::throw_exception (DCPReadError (String::compose ("unrecognised time specification %1; %2 has bad length", time, b[3])));
+			boost::throw_exception (ReadError (String::compose ("unrecognised time specification %1; %2 has bad length", time, b[3])));
 		}
 		e = raw_convert<int> (b[3]);
 		tcr = tcr_.get();
 	}
 }
+
 
 bool
 dcp::operator== (Time const & a, Time const & b)
@@ -176,11 +171,13 @@ dcp::operator== (Time const & a, Time const & b)
 	return (a.h == b.h && a.m == b.m && a.s == b.s && (a.e * b.tcr) == (b.e * a.tcr));
 }
 
+
 bool
 dcp::operator!= (Time const & a, Time const & b)
 {
 	return !(a == b);
 }
+
 
 bool
 dcp::operator<= (Time const & a, Time const & b)
@@ -188,11 +185,13 @@ dcp::operator<= (Time const & a, Time const & b)
 	return a < b || a == b;
 }
 
+
 bool
 dcp::operator>= (Time const & a, Time const & b)
 {
 	return a > b || a == b;
 }
+
 
 bool
 dcp::operator< (Time const & a, Time const & b)
@@ -212,6 +211,7 @@ dcp::operator< (Time const & a, Time const & b)
 	return (a.e * b.tcr) < (b.e * a.tcr);
 }
 
+
 bool
 dcp::operator> (Time const & a, Time const & b)
 {
@@ -230,12 +230,14 @@ dcp::operator> (Time const & a, Time const & b)
 	return (a.e * b.tcr) > (b.e * a.tcr);
 }
 
+
 ostream &
 dcp::operator<< (ostream& s, Time const & t)
 {
 	s << t.h << ":" << t.m << ":" << t.s << "." << t.e;
 	return s;
 }
+
 
 dcp::Time
 dcp::operator+ (Time a, Time b)
@@ -274,6 +276,7 @@ dcp::operator+ (Time a, Time b)
 	return r;
 }
 
+
 dcp::Time
 dcp::operator- (Time a, Time b)
 {
@@ -311,6 +314,7 @@ dcp::operator- (Time a, Time b)
 	return r;
 }
 
+
 float
 dcp::operator/ (Time a, Time const & b)
 {
@@ -319,13 +323,13 @@ dcp::operator/ (Time a, Time const & b)
 	return float (at) / bt;
 }
 
-/** @return A string of the form h:m:s:e padded as in 00:00:00:000 (for Interop) or 00:00:00:00 (for SMPTE) */
+
 string
 Time::as_string (Standard standard) const
 {
 	char buffer[64];
 
-	if (standard == SMPTE) {
+	if (standard == Standard::SMPTE) {
 		snprintf (buffer, sizeof(buffer), "%02d:%02d:%02d:%02d", h, m, s, e);
 	} else {
 		snprintf (buffer, sizeof(buffer), "%02d:%02d:%02d:%03d", h, m, s, e);
@@ -334,26 +338,28 @@ Time::as_string (Standard standard) const
 	return buffer;
 }
 
-/** @param tcr_ Timecode rate with which the return value should be counted.
- *  @return the total number of editable units that this time consists of at the specified timecode rate, rounded up
- *  to the nearest editable unit. For example, as_editable_units (24) returns the total time in frames at 24fps.
- */
+
 int64_t
-Time::as_editable_units (int tcr_) const
+Time::as_editable_units_floor (int tcr_) const
 {
-	return ceil (int64_t(e) * double (tcr_) / tcr) + int64_t(s) * tcr_ + int64_t(m) * 60 * tcr_ + int64_t(h) * 60 * 60 * tcr_;
+	return floor(int64_t(e) * double(tcr_) / tcr) + int64_t(s) * tcr_ + int64_t(m) * 60 * tcr_ + int64_t(h) * 60 * 60 * tcr_;
 }
 
-/** @return the total number of seconds that this time consists of */
+
+int64_t
+Time::as_editable_units_ceil (int tcr_) const
+{
+	return ceil(int64_t(e) * double(tcr_) / tcr) + int64_t(s) * tcr_ + int64_t(m) * 60 * tcr_ + int64_t(h) * 60 * 60 * tcr_;
+}
+
+
 double
 Time::as_seconds () const
 {
 	return h * 3600 + m * 60 + s + double(e) / tcr;
 }
 
-/** @param tcr_ New timecode rate.
- *  @return A new Time which is this time at the spcified new timecode rate.
- */
+
 Time
 Time::rebase (int tcr_) const
 {

@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2014 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,23 +31,30 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/metadata.h
+ *  @brief MXFMetadata class.
+ */
+
+
 #ifndef LIBDCP_METADATA_H
 #define LIBDCP_METADATA_H
 
-/** @file  src/metadata.h
- *  @brief XMLMetadata and MXFMetadata classes.
- */
 
 #include <string>
 
+
 class utc_offset_to_string_test;
+
 
 namespace ASDCP {
 	struct WriterInfo;
 }
 
+
 namespace dcp
 {
+
 
 /** @class MXFMetadata
  *  @brief Metadata that is written to a MXF file's header
@@ -56,6 +63,11 @@ class MXFMetadata
 {
 public:
 	MXFMetadata ();
+	MXFMetadata (std::string company_name_, std::string product_name_, std::string product_version_)
+		: company_name(company_name_)
+		, product_name(product_name_)
+		, product_version(product_version_)
+	{}
 
 	void read (ASDCP::WriterInfo const & info);
 
@@ -64,22 +76,8 @@ public:
 	std::string product_version;
 };
 
-/** @class XMLMetadata
- *  @brief Common metadata that is written to a few different XML files
- */
-class XMLMetadata
-{
-public:
-	XMLMetadata ();
-
-	void set_issue_date_now ();
-
-	std::string issuer;
-	std::string creator;
-	std::string issue_date;
-	std::string annotation_text;
-};
 
 }
+
 
 #endif

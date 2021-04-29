@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2014-2019 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2014-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -34,6 +34,7 @@
 #include "rgb_xyz.h"
 #include "openjpeg_image.h"
 #include "colour_conversion.h"
+#include "stream_operators.h"
 #include <boost/test/unit_test.hpp>
 #include <boost/bind.hpp>
 #include <boost/scoped_array.hpp>
@@ -42,7 +43,8 @@ using std::max;
 using std::list;
 using std::string;
 using std::cout;
-using boost::shared_ptr;
+using std::shared_ptr;
+using std::make_shared;
 using boost::optional;
 using boost::scoped_array;
 
@@ -64,7 +66,7 @@ BOOST_AUTO_TEST_CASE (rgb_xyz_test)
 		}
 	}
 
-	shared_ptr<dcp::OpenJPEGImage> xyz = dcp::rgb_to_xyz (rgb.get(), size, size.width * 6, dcp::ColourConversion::srgb_to_xyz ());
+	auto xyz = dcp::rgb_to_xyz (rgb.get(), size, size.width * 6, dcp::ColourConversion::srgb_to_xyz());
 
 	for (int y = 0; y < size.height; ++y) {
 		uint16_t* p = reinterpret_cast<uint16_t*> (rgb.get() + y * size.width * 6);
@@ -124,14 +126,14 @@ static list<string> notes;
 static void
 note_handler (dcp::NoteType n, string s)
 {
-	BOOST_REQUIRE_EQUAL (n, dcp::DCP_NOTE);
+	BOOST_REQUIRE_EQUAL (n, dcp::NoteType::NOTE);
 	notes.push_back (s);
 }
 
 /** Check that xyz_to_rgb clamps XYZ values correctly */
 BOOST_AUTO_TEST_CASE (xyz_rgb_range_test)
 {
-	shared_ptr<dcp::OpenJPEGImage> xyz (new dcp::OpenJPEGImage (dcp::Size (2, 2)));
+	auto xyz = make_shared<dcp::OpenJPEGImage>(dcp::Size(2, 2));
 
 	xyz->data(0)[0] = -4;
 	xyz->data(0)[1] = 6901;
@@ -155,7 +157,7 @@ BOOST_AUTO_TEST_CASE (xyz_rgb_range_test)
 
 	/* The 6 out-of-range samples should have been noted */
 	BOOST_REQUIRE_EQUAL (notes.size(), 6);
-	list<string>::const_iterator i = notes.begin ();
+	auto i = notes.begin ();
 	BOOST_REQUIRE_EQUAL (*i++, "XYZ value -4 out of range");
 	BOOST_REQUIRE_EQUAL (*i++, "XYZ value -4 out of range");
 	BOOST_REQUIRE_EQUAL (*i++, "XYZ value -4 out of range");
@@ -167,7 +169,7 @@ BOOST_AUTO_TEST_CASE (xyz_rgb_range_test)
 	   as inputs at the extremes (0 and 4095).
 	*/
 
-	uint16_t* buffer = reinterpret_cast<uint16_t*> (rgb.get ());
+	auto buffer = reinterpret_cast<uint16_t*> (rgb.get ());
 	BOOST_REQUIRE_EQUAL (buffer[0 * 3 + 0], buffer[2 * 3 + 1]);
 	BOOST_REQUIRE_EQUAL (buffer[0 * 3 + 1], buffer[2 * 3 + 1]);
 	BOOST_REQUIRE_EQUAL (buffer[0 * 3 + 2], buffer[2 * 3 + 2]);

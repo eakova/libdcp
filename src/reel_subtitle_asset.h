@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2017 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,42 +31,73 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/reel_subtitle_asset.h
  *  @brief ReelSubtitleAsset class.
  */
 
+
 #ifndef LIBDCP_REEL_SUBTITLE_ASSET_H
 #define LIBDCP_REEL_SUBTITLE_ASSET_H
 
+
+#include "language_tag.h"
 #include "reel_asset.h"
-#include "reel_mxf.h"
+#include "reel_file_asset.h"
 #include "subtitle_asset.h"
+
+
+struct verify_invalid_language1;
+
 
 namespace dcp {
 
+
 class SubtitleAsset;
 
+
 /** @class ReelSubtitleAsset
- *  @brief Part of a Reel's description which refers to a subtitle XML/MXF file.
+ *  @brief Part of a Reel's description which refers to a subtitle XML/MXF file
  */
-class ReelSubtitleAsset : public ReelAsset, public ReelMXF
+class ReelSubtitleAsset : public ReelFileAsset
 {
 public:
-	ReelSubtitleAsset (boost::shared_ptr<SubtitleAsset> asset, Fraction edit_rate, int64_t intrinsic_duration, int64_t entry_point);
-	explicit ReelSubtitleAsset (boost::shared_ptr<const cxml::Node>);
+	ReelSubtitleAsset (std::shared_ptr<SubtitleAsset> asset, Fraction edit_rate, int64_t intrinsic_duration, int64_t entry_point);
+	explicit ReelSubtitleAsset (std::shared_ptr<const cxml::Node>);
 
-	xmlpp::Node* write_to_cpl (xmlpp::Node* node, Standard standard) const;
-	bool equals (boost::shared_ptr<const ReelSubtitleAsset>, EqualityOptions, NoteHandler) const;
-
-	boost::shared_ptr<SubtitleAsset> asset () const {
-		return asset_of_type<SubtitleAsset> ();
+	std::shared_ptr<const SubtitleAsset> asset () const {
+		return asset_of_type<const SubtitleAsset>();
 	}
 
+	std::shared_ptr<SubtitleAsset> asset () {
+		return asset_of_type<SubtitleAsset>();
+	}
+
+	xmlpp::Node* write_to_cpl (xmlpp::Node* node, Standard standard) const override;
+
+	bool equals (std::shared_ptr<const ReelSubtitleAsset>, EqualityOptions, NoteHandler) const;
+
+	void set_language (dcp::LanguageTag language);
+
+	boost::optional<std::string> language () const {
+		return _language;
+	}
+
+protected:
+	/** As in other places, this is stored and returned as a string so that
+	 *  we can tolerate non-RFC-5646 strings, but must be set as a dcp::LanguageTag
+	 *  to try to ensure that we create compliant output.
+	 */
+	boost::optional<std::string> _language;
+
 private:
-	std::string key_type () const;
-	std::string cpl_node_name (Standard standard) const;
+	friend struct ::verify_invalid_language1;
+
+	std::string cpl_node_name (Standard standard) const override;
 };
 
+
 }
+
 
 #endif

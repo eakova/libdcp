@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2018 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,6 +31,12 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/subtitle_asset.cc
+ *  @brief SubtitleAsset class
+ */
+
+
 #include "raw_convert.h"
 #include "compose.hpp"
 #include "subtitle_asset.h"
@@ -40,30 +46,35 @@
 #include "subtitle_string.h"
 #include "subtitle_image.h"
 #include "dcp_assert.h"
+#include "load_font_node.h"
+#include "reel_asset.h"
 #include <asdcp/AS_DCP.h>
 #include <asdcp/KM_util.h>
 #include <libxml++/nodes/element.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/shared_array.hpp>
-#include <boost/foreach.hpp>
 
+
+using std::dynamic_pointer_cast;
 using std::string;
-using std::list;
 using std::cout;
 using std::cerr;
 using std::map;
-using boost::shared_ptr;
+using std::shared_ptr;
+using std::vector;
+using std::make_shared;
 using boost::shared_array;
 using boost::optional;
-using boost::dynamic_pointer_cast;
 using boost::lexical_cast;
 using namespace dcp;
+
 
 SubtitleAsset::SubtitleAsset ()
 {
 
 }
+
 
 SubtitleAsset::SubtitleAsset (boost::filesystem::path file)
 	: Asset (file)
@@ -71,42 +82,46 @@ SubtitleAsset::SubtitleAsset (boost::filesystem::path file)
 
 }
 
+
 string
 string_attribute (xmlpp::Element const * node, string name)
 {
-	xmlpp::Attribute* a = node->get_attribute (name);
+	auto a = node->get_attribute (name);
 	if (!a) {
 		throw XMLError (String::compose ("missing attribute %1", name));
 	}
 	return string (a->get_value ());
 }
 
+
 optional<string>
 optional_string_attribute (xmlpp::Element const * node, string name)
 {
-	xmlpp::Attribute* a = node->get_attribute (name);
+	auto a = node->get_attribute (name);
 	if (!a) {
-		return optional<string>();
+		return {};
 	}
 	return string (a->get_value ());
 }
 
+
 optional<bool>
 optional_bool_attribute (xmlpp::Element const * node, string name)
 {
-	optional<string> s = optional_string_attribute (node, name);
+	auto s = optional_string_attribute (node, name);
 	if (!s) {
-		return optional<bool> ();
+		return {};
 	}
 
 	return (s.get() == "1" || s.get() == "yes");
 }
 
+
 template <class T>
 optional<T>
 optional_number_attribute (xmlpp::Element const * node, string name)
 {
-	boost::optional<std::string> s = optional_string_attribute (node, name);
+	auto s = optional_string_attribute (node, name);
 	if (!s) {
 		return boost::optional<T> ();
 	}
@@ -116,12 +131,13 @@ optional_number_attribute (xmlpp::Element const * node, string name)
 	return raw_convert<T> (t);
 }
 
+
 SubtitleAsset::ParseState
 SubtitleAsset::font_node_state (xmlpp::Element const * node, Standard standard) const
 {
 	ParseState ps;
 
-	if (standard == INTEROP) {
+	if (standard == Standard::INTEROP) {
 		ps.font_id = optional_string_attribute (node, "Id");
 	} else {
 		ps.font_id = optional_string_attribute (node, "ID");
@@ -130,16 +146,16 @@ SubtitleAsset::font_node_state (xmlpp::Element const * node, Standard standard) 
 	ps.aspect_adjust = optional_number_attribute<float> (node, "AspectAdjust");
 	ps.italic = optional_bool_attribute (node, "Italic");
 	ps.bold = optional_string_attribute(node, "Weight").get_value_or("normal") == "bold";
-	if (standard == INTEROP) {
+	if (standard == Standard::INTEROP) {
 		ps.underline = optional_bool_attribute (node, "Underlined");
 	} else {
 		ps.underline = optional_bool_attribute (node, "Underline");
 	}
-	optional<string> c = optional_string_attribute (node, "Color");
+	auto c = optional_string_attribute (node, "Color");
 	if (c) {
 		ps.colour = Colour (c.get ());
 	}
-	optional<string> const e = optional_string_attribute (node, "Effect");
+	auto const e = optional_string_attribute (node, "Effect");
 	if (e) {
 		ps.effect = string_to_effect (e.get ());
 	}
@@ -154,7 +170,7 @@ SubtitleAsset::font_node_state (xmlpp::Element const * node, Standard standard) 
 void
 SubtitleAsset::position_align (SubtitleAsset::ParseState& ps, xmlpp::Element const * node) const
 {
-	optional<float> hp = optional_number_attribute<float> (node, "HPosition");
+	auto hp = optional_number_attribute<float> (node, "HPosition");
 	if (!hp) {
 		hp = optional_number_attribute<float> (node, "Hposition");
 	}
@@ -162,7 +178,7 @@ SubtitleAsset::position_align (SubtitleAsset::ParseState& ps, xmlpp::Element con
 		ps.h_position = hp.get () / 100;
 	}
 
-	optional<string> ha = optional_string_attribute (node, "HAlign");
+	auto ha = optional_string_attribute (node, "HAlign");
 	if (!ha) {
 		ha = optional_string_attribute (node, "Halign");
 	}
@@ -170,7 +186,7 @@ SubtitleAsset::position_align (SubtitleAsset::ParseState& ps, xmlpp::Element con
 		ps.h_align = string_to_halign (ha.get ());
 	}
 
-	optional<float> vp = optional_number_attribute<float> (node, "VPosition");
+	auto vp = optional_number_attribute<float> (node, "VPosition");
 	if (!vp) {
 		vp = optional_number_attribute<float> (node, "Vposition");
 	}
@@ -178,7 +194,7 @@ SubtitleAsset::position_align (SubtitleAsset::ParseState& ps, xmlpp::Element con
 		ps.v_position = vp.get () / 100;
 	}
 
-	optional<string> va = optional_string_attribute (node, "VAlign");
+	auto va = optional_string_attribute (node, "VAlign");
 	if (!va) {
 		va = optional_string_attribute (node, "Valign");
 	}
@@ -188,6 +204,7 @@ SubtitleAsset::position_align (SubtitleAsset::ParseState& ps, xmlpp::Element con
 
 }
 
+
 SubtitleAsset::ParseState
 SubtitleAsset::text_node_state (xmlpp::Element const * node) const
 {
@@ -195,15 +212,16 @@ SubtitleAsset::text_node_state (xmlpp::Element const * node) const
 
 	position_align (ps, node);
 
-	optional<string> d = optional_string_attribute (node, "Direction");
+	auto d = optional_string_attribute (node, "Direction");
 	if (d) {
 		ps.direction = string_to_direction (d.get ());
 	}
 
-	ps.type = ParseState::TEXT;
+	ps.type = ParseState::Type::TEXT;
 
 	return ps;
 }
+
 
 SubtitleAsset::ParseState
 SubtitleAsset::image_node_state (xmlpp::Element const * node) const
@@ -212,10 +230,11 @@ SubtitleAsset::image_node_state (xmlpp::Element const * node) const
 
 	position_align (ps, node);
 
-	ps.type = ParseState::IMAGE;
+	ps.type = ParseState::Type::IMAGE;
 
 	return ps;
 }
+
 
 SubtitleAsset::ParseState
 SubtitleAsset::subtitle_node_state (xmlpp::Element const * node, optional<int> tcr) const
@@ -228,10 +247,11 @@ SubtitleAsset::subtitle_node_state (xmlpp::Element const * node, optional<int> t
 	return ps;
 }
 
+
 Time
 SubtitleAsset::fade_time (xmlpp::Element const * node, string name, optional<int> tcr) const
 {
-	string const u = optional_string_attribute(node, name).get_value_or ("");
+	auto const u = optional_string_attribute(node, name).get_value_or ("");
 	Time t;
 
 	if (u.empty ()) {
@@ -249,8 +269,9 @@ SubtitleAsset::fade_time (xmlpp::Element const * node, string name, optional<int
 	return t;
 }
 
+
 void
-SubtitleAsset::parse_subtitles (xmlpp::Element const * node, list<ParseState>& state, optional<int> tcr, Standard standard)
+SubtitleAsset::parse_subtitles (xmlpp::Element const * node, vector<ParseState>& state, optional<int> tcr, Standard standard)
 {
 	if (node->get_name() == "Font") {
 		state.push_back (font_node_state (node, standard));
@@ -266,13 +287,12 @@ SubtitleAsset::parse_subtitles (xmlpp::Element const * node, list<ParseState>& s
 		throw XMLError ("unexpected node " + node->get_name());
 	}
 
-	xmlpp::Node::NodeList c = node->get_children ();
-	for (xmlpp::Node::NodeList::const_iterator i = c.begin(); i != c.end(); ++i) {
-		xmlpp::ContentNode const * v = dynamic_cast<xmlpp::ContentNode const *> (*i);
+	for (auto i: node->get_children()) {
+		auto const v = dynamic_cast<xmlpp::ContentNode const *>(i);
 		if (v) {
 			maybe_add_subtitle (v->get_content(), state, standard);
 		}
-		xmlpp::Element const * e = dynamic_cast<xmlpp::Element const *> (*i);
+		auto const e = dynamic_cast<xmlpp::Element const *>(i);
 		if (e) {
 			parse_subtitles (e, state, tcr, standard);
 		}
@@ -281,15 +301,16 @@ SubtitleAsset::parse_subtitles (xmlpp::Element const * node, list<ParseState>& s
 	state.pop_back ();
 }
 
+
 void
-SubtitleAsset::maybe_add_subtitle (string text, list<ParseState> const & parse_state, Standard standard)
+SubtitleAsset::maybe_add_subtitle (string text, vector<ParseState> const & parse_state, Standard standard)
 {
 	if (empty_or_white_space (text)) {
 		return;
 	}
 
 	ParseState ps;
-	BOOST_FOREACH (ParseState const & i, parse_state) {
+	for (auto const& i: parse_state) {
 		if (i.font_id) {
 			ps.font_id = i.font_id.get();
 		}
@@ -357,60 +378,89 @@ SubtitleAsset::maybe_add_subtitle (string text, list<ParseState> const & parse_s
 	DCP_ASSERT (ps.type);
 
 	switch (ps.type.get()) {
-	case ParseState::TEXT:
+	case ParseState::Type::TEXT:
 		_subtitles.push_back (
-			shared_ptr<Subtitle> (
-				new SubtitleString (
-					ps.font_id,
-					ps.italic.get_value_or (false),
-					ps.bold.get_value_or (false),
-					ps.underline.get_value_or (false),
-					ps.colour.get_value_or (dcp::Colour (255, 255, 255)),
-					ps.size.get_value_or (42),
-					ps.aspect_adjust.get_value_or (1.0),
-					ps.in.get(),
-					ps.out.get(),
-					ps.h_position.get_value_or(0),
-					ps.h_align.get_value_or(HALIGN_CENTER),
-					ps.v_position.get_value_or(0),
-					ps.v_align.get_value_or(VALIGN_CENTER),
-					ps.direction.get_value_or (DIRECTION_LTR),
-					text,
-					ps.effect.get_value_or (NONE),
-					ps.effect_colour.get_value_or (dcp::Colour (0, 0, 0)),
-					ps.fade_up_time.get_value_or(Time()),
-					ps.fade_down_time.get_value_or(Time())
-					)
+			make_shared<SubtitleString>(
+				ps.font_id,
+				ps.italic.get_value_or (false),
+				ps.bold.get_value_or (false),
+				ps.underline.get_value_or (false),
+				ps.colour.get_value_or (dcp::Colour (255, 255, 255)),
+				ps.size.get_value_or (42),
+				ps.aspect_adjust.get_value_or (1.0),
+				ps.in.get(),
+				ps.out.get(),
+				ps.h_position.get_value_or(0),
+				ps.h_align.get_value_or(HAlign::CENTER),
+				ps.v_position.get_value_or(0),
+				ps.v_align.get_value_or(VAlign::CENTER),
+				ps.direction.get_value_or (Direction::LTR),
+				text,
+				ps.effect.get_value_or (Effect::NONE),
+				ps.effect_colour.get_value_or (dcp::Colour (0, 0, 0)),
+				ps.fade_up_time.get_value_or(Time()),
+				ps.fade_down_time.get_value_or(Time())
 				)
 			);
 		break;
-	case ParseState::IMAGE:
+	case ParseState::Type::IMAGE:
+	{
+		switch (standard) {
+		case Standard::INTEROP:
+			if (text.size() >= 4) {
+				/* Remove file extension */
+				text = text.substr(0, text.size() - 4);
+			}
+			break;
+		case Standard::SMPTE:
+			/* It looks like this urn:uuid: is required, but DoM wasn't expecting it (and not writing it)
+			 * until around 2.15.140 so I guess either:
+			 *   a) it is not (always) used in the field, or
+			 *   b) nobody noticed / complained.
+			 */
+			if (text.substr(0, 9) == "urn:uuid:") {
+				text = text.substr(9);
+			}
+			break;
+		}
+
 		/* Add a subtitle with no image data and we'll fill that in later */
 		_subtitles.push_back (
-			shared_ptr<Subtitle> (
-				new SubtitleImage (
-					Data (),
-					standard == INTEROP ? text.substr(0, text.size() - 4) : text,
-					ps.in.get(),
-					ps.out.get(),
-					ps.h_position.get_value_or(0),
-					ps.h_align.get_value_or(HALIGN_CENTER),
-					ps.v_position.get_value_or(0),
-					ps.v_align.get_value_or(VALIGN_CENTER),
-					ps.fade_up_time.get_value_or(Time()),
-					ps.fade_down_time.get_value_or(Time())
-					)
+			make_shared<SubtitleImage>(
+				ArrayData(),
+				text,
+				ps.in.get(),
+				ps.out.get(),
+				ps.h_position.get_value_or(0),
+				ps.h_align.get_value_or(HAlign::CENTER),
+				ps.v_position.get_value_or(0),
+				ps.v_align.get_value_or(VAlign::CENTER),
+				ps.fade_up_time.get_value_or(Time()),
+				ps.fade_down_time.get_value_or(Time())
 				)
 			);
 		break;
 	}
+	}
 }
 
-list<shared_ptr<Subtitle> >
+
+vector<shared_ptr<const Subtitle>>
+SubtitleAsset::subtitles () const
+{
+	vector<shared_ptr<const Subtitle>> s;
+	for (auto i: _subtitles) {
+		s.push_back (i);
+	}
+	return s;
+}
+
+
+vector<shared_ptr<const Subtitle>>
 SubtitleAsset::subtitles_during (Time from, Time to, bool starting) const
 {
-	list<shared_ptr<Subtitle> > s;
-	BOOST_FOREACH (shared_ptr<Subtitle> i, _subtitles) {
+	vector<shared_ptr<const Subtitle>> s;
+	for (auto i: _subtitles) {
 		if ((starting && from <= i->in() && i->in() < to) || (!starting && i->out() >= from && i->in() <= to)) {
 			s.push_back (i);
 		}
@@ -419,17 +469,39 @@ SubtitleAsset::subtitles_during (Time from, Time to, bool starting) const
 	return s;
 }
 
+
+/* XXX: this needs a test */
+vector<shared_ptr<const Subtitle>>
+SubtitleAsset::subtitles_in_reel (shared_ptr<const dcp::ReelAsset> asset) const
+{
+	auto frame_rate = asset->edit_rate().as_float();
+	auto start = dcp::Time(asset->entry_point().get_value_or(0), frame_rate, time_code_rate());
+	auto during = subtitles_during (start, start + dcp::Time(asset->intrinsic_duration(), frame_rate, time_code_rate()), false);
+
+	vector<shared_ptr<const dcp::Subtitle>> corrected;
+	for (auto i: during) {
+		auto c = make_shared<dcp::Subtitle>(*i);
+		c->set_in (c->in() - start);
+		c->set_out (c->out() - start);
+		corrected.push_back (c);
+	}
+
+	return corrected;
+}
+
+
 void
 SubtitleAsset::add (shared_ptr<Subtitle> s)
 {
 	_subtitles.push_back (s);
 }
 
+
 Time
 SubtitleAsset::latest_subtitle_out () const
 {
 	Time t;
-	BOOST_FOREACH (shared_ptr<Subtitle> i, _subtitles) {
+	for (auto i: _subtitles) {
 		if (i->out() > t) {
 			t = i->out ();
 		}
@@ -438,6 +510,7 @@ SubtitleAsset::latest_subtitle_out () const
 	return t;
 }
 
+
 bool
 SubtitleAsset::equals (shared_ptr<const Asset> other_asset, EqualityOptions options, NoteHandler note) const
 {
@@ -445,37 +518,36 @@ SubtitleAsset::equals (shared_ptr<const Asset> other_asset, EqualityOptions opti
 		return false;
 	}
 
-	shared_ptr<const SubtitleAsset> other = dynamic_pointer_cast<const SubtitleAsset> (other_asset);
+	auto other = dynamic_pointer_cast<const SubtitleAsset> (other_asset);
 	if (!other) {
 		return false;
 	}
 
 	if (_subtitles.size() != other->_subtitles.size()) {
-		note (DCP_ERROR, "subtitles differ");
+		note (NoteType::ERROR, String::compose("different number of subtitles: %1 vs %2", _subtitles.size(), other->_subtitles.size()));
 		return false;
 	}
 
-	list<shared_ptr<Subtitle> >::const_iterator i = _subtitles.begin ();
-	list<shared_ptr<Subtitle> >::const_iterator j = other->_subtitles.begin ();
+	auto i = _subtitles.begin();
+	auto j = other->_subtitles.begin();
 
 	while (i != _subtitles.end()) {
-		shared_ptr<SubtitleString> string_i = dynamic_pointer_cast<SubtitleString> (*i);
-		shared_ptr<SubtitleString> string_j = dynamic_pointer_cast<SubtitleString> (*j);
-		shared_ptr<SubtitleImage> image_i = dynamic_pointer_cast<SubtitleImage> (*i);
-		shared_ptr<SubtitleImage> image_j = dynamic_pointer_cast<SubtitleImage> (*j);
+		auto string_i = dynamic_pointer_cast<SubtitleString> (*i);
+		auto string_j = dynamic_pointer_cast<SubtitleString> (*j);
+		auto image_i = dynamic_pointer_cast<SubtitleImage> (*i);
+		auto image_j = dynamic_pointer_cast<SubtitleImage> (*j);
 
 		if ((string_i && !string_j) || (image_i && !image_j)) {
-			note (DCP_ERROR, "subtitles differ");
+			note (NoteType::ERROR, "subtitles differ: string vs. image");
 			return false;
 		}
 
 		if (string_i && *string_i != *string_j) {
-			note (DCP_ERROR, "subtitles differ");
+			note (NoteType::ERROR, String::compose("subtitles differ in text or metadata: %1 vs %2", string_i->text(), string_j->text()));
 			return false;
 		}
 
-		if (image_i && *image_i != *image_j) {
-			note (DCP_ERROR, "subtitles differ");
+		if (image_i && !image_i->equals(image_j, options, note)) {
 			return false;
 		}
 
@@ -485,6 +557,7 @@ SubtitleAsset::equals (shared_ptr<const Asset> other_asset, EqualityOptions opti
 
 	return true;
 }
+
 
 struct SubtitleSorter
 {
@@ -496,6 +569,7 @@ struct SubtitleSorter
 	}
 };
 
+
 void
 SubtitleAsset::pull_fonts (shared_ptr<order::Part> part)
 {
@@ -504,7 +578,7 @@ SubtitleAsset::pull_fonts (shared_ptr<order::Part> part)
 	}
 
 	/* Pull up from children */
-	BOOST_FOREACH (shared_ptr<order::Part> i, part->children) {
+	for (auto i: part->children) {
 		pull_fonts (i);
 	}
 
@@ -513,19 +587,19 @@ SubtitleAsset::pull_fonts (shared_ptr<order::Part> part)
 		   these features go into part's font.
 		*/
 		part->font = part->children.front()->font;
-		BOOST_FOREACH (shared_ptr<order::Part> i, part->children) {
+		for (auto i: part->children) {
 			part->font.take_intersection (i->font);
 		}
 
 		/* Remove common values from part's children's fonts */
-		BOOST_FOREACH (shared_ptr<order::Part> i, part->children) {
+		for (auto i: part->children) {
 			i->font.take_difference (part->font);
 		}
 	}
 
 	/* Merge adjacent children with the same font */
-	list<shared_ptr<order::Part> >::const_iterator i = part->children.begin();
-	list<shared_ptr<order::Part> > merged;
+	auto i = part->children.begin();
+	vector<shared_ptr<order::Part>> merged;
 
 	while (i != part->children.end()) {
 
@@ -533,7 +607,7 @@ SubtitleAsset::pull_fonts (shared_ptr<order::Part> part)
 			merged.push_back (*i);
 			++i;
 		} else {
-			list<shared_ptr<order::Part> >::const_iterator j = i;
+			auto j = i;
 			++j;
 			while (j != part->children.end() && (*i)->font == (*j)->font) {
 				++j;
@@ -543,7 +617,7 @@ SubtitleAsset::pull_fonts (shared_ptr<order::Part> part)
 				++i;
 			} else {
 				shared_ptr<order::Part> group (new order::Part (part, (*i)->font));
-				for (list<shared_ptr<order::Part> >::const_iterator k = i; k != j; ++k) {
+				for (auto k = i; k != j; ++k) {
 					(*k)->font.clear ();
 					group->children.push_back (*k);
 				}
@@ -556,20 +630,21 @@ SubtitleAsset::pull_fonts (shared_ptr<order::Part> part)
 	part->children = merged;
 }
 
+
 /** @param standard Standard (INTEROP or SMPTE); this is used rather than putting things in the child
  *  class because the differences between the two are fairly subtle.
  */
 void
 SubtitleAsset::subtitles_as_xml (xmlpp::Element* xml_root, int time_code_rate, Standard standard) const
 {
-	list<shared_ptr<Subtitle> > sorted = _subtitles;
-	sorted.sort (SubtitleSorter ());
+	auto sorted = _subtitles;
+	std::stable_sort(sorted.begin(), sorted.end(), SubtitleSorter());
 
 	/* Gather our subtitles into a hierarchy of Subtitle/Text/String objects, writing
 	   font information into the bottom level (String) objects.
 	*/
 
-	shared_ptr<order::Part> root (new order::Part (shared_ptr<order::Part> ()));
+	auto root = make_shared<order::Part>(shared_ptr<order::Part>());
 	shared_ptr<order::Subtitle> subtitle;
 	shared_ptr<order::Text> text;
 
@@ -583,7 +658,7 @@ SubtitleAsset::subtitles_as_xml (xmlpp::Element* xml_root, int time_code_rate, S
 	float last_v_position;
 	Direction last_direction;
 
-	BOOST_FOREACH (shared_ptr<Subtitle> i, sorted) {
+	for (auto i: sorted) {
 		if (!subtitle ||
 		    (last_in != i->in() ||
 		     last_out != i->out() ||
@@ -591,7 +666,7 @@ SubtitleAsset::subtitles_as_xml (xmlpp::Element* xml_root, int time_code_rate, S
 		     last_fade_down_time != i->fade_down_time())
 			) {
 
-			subtitle.reset (new order::Subtitle (root, i->in(), i->out(), i->fade_up_time(), i->fade_down_time()));
+			subtitle = make_shared<order::Subtitle>(root, i->in(), i->out(), i->fade_up_time(), i->fade_down_time());
 			root->children.push_back (subtitle);
 
 			last_in = i->in ();
@@ -601,7 +676,7 @@ SubtitleAsset::subtitles_as_xml (xmlpp::Element* xml_root, int time_code_rate, S
 			text.reset ();
 		}
 
-		shared_ptr<SubtitleString> is = dynamic_pointer_cast<SubtitleString>(i);
+		auto is = dynamic_pointer_cast<SubtitleString>(i);
 		if (is) {
 			if (!text ||
 			    last_h_align != is->h_align() ||
@@ -620,14 +695,14 @@ SubtitleAsset::subtitles_as_xml (xmlpp::Element* xml_root, int time_code_rate, S
 				last_direction = is->direction ();
 			}
 
-			text->children.push_back (shared_ptr<order::String> (new order::String (text, order::Font (is, standard), is->text())));
+			text->children.push_back (make_shared<order::String>(text, order::Font (is, standard), is->text()));
 		}
 
-		shared_ptr<SubtitleImage> ii = dynamic_pointer_cast<SubtitleImage>(i);
+		auto ii = dynamic_pointer_cast<SubtitleImage>(i);
 		if (ii) {
 			text.reset ();
 			subtitle->children.push_back (
-				shared_ptr<order::Image> (new order::Image (subtitle, ii->id(), ii->png_image(), ii->h_align(), ii->h_position(), ii->v_align(), ii->v_position()))
+				make_shared<order::Image>(subtitle, ii->id(), ii->png_image(), ii->h_align(), ii->h_position(), ii->v_align(), ii->v_position())
 				);
 		}
 	}
@@ -646,12 +721,64 @@ SubtitleAsset::subtitles_as_xml (xmlpp::Element* xml_root, int time_code_rate, S
 	root->write_xml (xml_root, context);
 }
 
-map<string, Data>
-SubtitleAsset::fonts_with_load_ids () const
+
+map<string, ArrayData>
+SubtitleAsset::font_data () const
 {
-	map<string, Data> out;
-	BOOST_FOREACH (Font const & i, _fonts) {
+	map<string, ArrayData> out;
+	for (auto const& i: _fonts) {
 		out[i.load_id] = i.data;
 	}
 	return out;
+}
+
+
+map<string, boost::filesystem::path>
+SubtitleAsset::font_filenames () const
+{
+	map<string, boost::filesystem::path> out;
+	for (auto const& i: _fonts) {
+		if (i.file) {
+			out[i.load_id] = *i.file;
+		}
+	}
+	return out;
+}
+
+
+/** Replace empty IDs in any <LoadFontId> and <Font> tags with
+ *  a dummy string.  Some systems give errors with empty font IDs
+ *  (see DCP-o-matic bug #1689).
+ */
+void
+SubtitleAsset::fix_empty_font_ids ()
+{
+	bool have_empty = false;
+	vector<string> ids;
+	for (auto i: load_font_nodes()) {
+		if (i->id == "") {
+			have_empty = true;
+		} else {
+			ids.push_back (i->id);
+		}
+	}
+
+	if (!have_empty) {
+		return;
+	}
+
+	string const empty_id = unique_string (ids, "font");
+
+	for (auto i: load_font_nodes()) {
+		if (i->id == "") {
+			i->id = empty_id;
+		}
+	}
+
+	for (auto i: _subtitles) {
+		auto j = dynamic_pointer_cast<SubtitleString> (i);
+		if (j && j->font() && j->font().get() == "") {
+			j->set_font (empty_id);
+		}
+	}
 }

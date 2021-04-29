@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2016 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2016-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,24 +31,36 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/locale_convert.cc
+ *  @brief Methods to convert to/from string using the current locale
+ */
+
+
 #ifndef LIBDCP_LOCALE_CONVERT_H
 #define LIBDCP_LOCALE_CONVERT_H
 
+
+#include "util.h"
 #include <boost/filesystem.hpp>
 #include <boost/static_assert.hpp>
 #include <string>
 #include <cstdio>
 
+
 namespace dcp {
+
 
 template <typename P, typename Q>
 P
-locale_convert (Q x, int precision = 16, bool fixed = false)
+locale_convert (Q, int precision = 16, bool fixed = false)
 {
 	/* We can't write a generic version of locale_convert; all required
 	   versions must be specialised.
 	*/
 	BOOST_STATIC_ASSERT (sizeof (Q) == 0);
+	LIBDCP_UNUSED(precision);
+	LIBDCP_UNUSED(fixed);
 }
 
 template <>
@@ -155,6 +167,8 @@ template <>
 double
 locale_convert (std::string x, int, bool);
 
+
 }
+
 
 #endif

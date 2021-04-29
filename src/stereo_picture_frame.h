@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2016 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,16 +31,23 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/stereo_picture_frame.h
+ *  @brief StereoPictureFrame class
+ */
+
+
 #ifndef LIBDCP_STEREO_PICTURE_FRAME_H
 #define LIBDCP_STEREO_PICTURE_FRAME_H
 
+
 #include "types.h"
 #include "asset_reader.h"
-#include <boost/shared_ptr.hpp>
-#include <boost/noncopyable.hpp>
+#include <memory>
 #include <boost/filesystem.hpp>
 #include <stdint.h>
 #include <string>
+
 
 namespace ASDCP {
 	namespace JP2K {
@@ -50,26 +57,47 @@ namespace ASDCP {
 	class AESDecContext;
 }
 
+
 namespace dcp {
 
-class OpenJPEGImage;
 
-/** A single frame of a 3D (stereoscopic) picture asset */
-class StereoPictureFrame : public boost::noncopyable
+class OpenJPEGImage;
+class StereoPictureFrame;
+
+
+/** @class StereoPictureFrame
+ *  @brief A single frame of a 3D (stereoscopic) picture asset
+ */
+class StereoPictureFrame
 {
 public:
 	StereoPictureFrame ();
-	~StereoPictureFrame ();
 
-	boost::shared_ptr<OpenJPEGImage> xyz_image (Eye eye, int reduce = 0) const;
+	StereoPictureFrame (StereoPictureFrame const &) = delete;
+	StereoPictureFrame& operator= (StereoPictureFrame const &) = delete;
 
-	uint8_t const * left_j2k_data () const;
-	uint8_t* left_j2k_data ();
-	int left_j2k_size () const;
+	std::shared_ptr<OpenJPEGImage> xyz_image (Eye eye, int reduce = 0) const;
 
-	uint8_t const * right_j2k_data () const;
-	uint8_t* right_j2k_data ();
-	int right_j2k_size () const;
+	class Part : public Data
+	{
+	public:
+		Part (std::shared_ptr<ASDCP::JP2K::SFrameBuffer> buffer, Eye eye);
+
+		uint8_t const * data () const override;
+		uint8_t * data () override;
+		int size () const override;
+
+	private:
+		friend class StereoPictureFrame;
+
+		ASDCP::JP2K::FrameBuffer& mono () const;
+
+		std::shared_ptr<ASDCP::JP2K::SFrameBuffer> _buffer;
+		Eye _eye;
+	};
+
+	std::shared_ptr<Part> left () const;
+	std::shared_ptr<Part> right () const;
 
 private:
 	/* XXX: this is a bit of a shame, but I tried friend StereoPictureAssetReader and it's
@@ -77,11 +105,13 @@ private:
 	*/
 	friend class AssetReader<ASDCP::JP2K::MXFSReader, StereoPictureFrame>;
 
-	StereoPictureFrame (ASDCP::JP2K::MXFSReader* reader, int n, boost::shared_ptr<DecryptionContext>);
+	StereoPictureFrame (ASDCP::JP2K::MXFSReader* reader, int n, std::shared_ptr<DecryptionContext>);
 
-	ASDCP::JP2K::SFrameBuffer* _buffer;
+	std::shared_ptr<ASDCP::JP2K::SFrameBuffer> _buffer;
 };
 
+
 }
+
 
 #endif

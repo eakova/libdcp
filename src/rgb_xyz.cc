@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2013-2015 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2013-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,41 +31,36 @@
     files in the program, then also delete it here.
 */
 
-#include "rgb_xyz.h"
-#include "openjpeg_image.h"
+
+/** @file  rgb_xyz.cc
+ *  @brief Conversion between RGB and XYZ
+ */
+
+
 #include "colour_conversion.h"
-#include "transfer_function.h"
-#include "dcp_assert.h"
 #include "compose.hpp"
+#include "dcp_assert.h"
+#include "openjpeg_image.h"
+#include "rgb_xyz.h"
+#include "transfer_function.h"
 #include <cmath>
 
-using std::min;
-using std::max;
+
 using std::cout;
-using boost::shared_ptr;
+using std::make_shared;
+using std::max;
+using std::min;
+using std::shared_ptr;
 using boost::optional;
 using namespace dcp;
 
-#define DCI_COEFFICIENT (48.0 / 52.37)
 
-/** Convert an XYZ image to RGBA.
- *  @param xyz_image Image in XYZ.
- *  @param conversion Colour conversion to use.
- *  @param argb Buffer to fill with RGBA data.  The format of the data is:
- *
- *  <pre>
- *  Byte   /- 0 -------|- 1 --------|- 2 --------|- 3 --------|- 4 --------|- 5 --------| ...
- *         |(0, 0) Blue|(0, 0)Green |(0, 0) Red  |(0, 0) Alpha|(0, 1) Blue |(0, 1) Green| ...
- *  </pre>
- *
- *  So that the first byte is the blue component of the pixel at x=0, y=0, the second
- *  is the green component, and so on.
- *
- *  Lines are packed so that the second row directly follows the first.
- */
+static auto constexpr DCI_COEFFICIENT = 48.0 / 52.37;
+
+
 void
 dcp::xyz_to_rgba (
-	boost::shared_ptr<const OpenJPEGImage> xyz_image,
+	std::shared_ptr<const OpenJPEGImage> xyz_image,
 	ColourConversion const & conversion,
 	uint8_t* argb,
 	int stride
@@ -139,15 +134,7 @@ dcp::xyz_to_rgba (
 	}
 }
 
-/** Convert an XYZ image to 48bpp RGB.
- *  @param xyz_image Frame in XYZ.
- *  @param conversion Colour conversion to use.
- *  @param rgb Buffer to fill with RGB data.  Format is packed RGB
- *  16:16:16, 48bpp, 16R, 16G, 16B, with the 2-byte value for each
- *  R/G/B component stored as little-endian; i.e. AV_PIX_FMT_RGB48LE.
- *  @param stride Stride for RGB data in bytes.
- *  @param note Optional handler for any notes that may be made during the conversion (e.g. when clamping occurs).
- */
+
 void
 dcp::xyz_to_rgb (
 	shared_ptr<const OpenJPEGImage> xyz_image,
@@ -172,7 +159,7 @@ dcp::xyz_to_rgb (
 
 	double const * lut_in = conversion.out()->lut (12, false);
 	double const * lut_out = conversion.in()->lut (16, true);
-	boost::numeric::ublas::matrix<double> const matrix = conversion.xyz_to_rgb ();
+	auto const matrix = conversion.xyz_to_rgb ();
 
 	double fast_matrix[9] = {
 		matrix (0, 0), matrix (0, 1), matrix (0, 2),
@@ -184,7 +171,7 @@ dcp::xyz_to_rgb (
 	int const width = xyz_image->size().width;
 
 	for (int y = 0; y < height; ++y) {
-		uint16_t* rgb_line = reinterpret_cast<uint16_t*> (rgb + y * stride);
+		auto rgb_line = reinterpret_cast<uint16_t*> (rgb + y * stride);
 		for (int x = 0; x < width; ++x) {
 
 			int cx = *xyz_x++;
@@ -193,21 +180,21 @@ dcp::xyz_to_rgb (
 
 			if (cx < 0 || cx > 4095) {
 				if (note) {
-					note.get() (DCP_NOTE, String::compose ("XYZ value %1 out of range", cx));
+					note.get()(NoteType::NOTE, String::compose("XYZ value %1 out of range", cx));
 				}
 				cx = max (min (cx, 4095), 0);
 			}
 
 			if (cy < 0 || cy > 4095) {
 				if (note) {
-					note.get() (DCP_NOTE, String::compose ("XYZ value %1 out of range", cy));
+					note.get()(NoteType::NOTE, String::compose("XYZ value %1 out of range", cy));
 				}
 				cy = max (min (cy, 4095), 0);
 			}
 
 			if (cz < 0 || cz > 4095) {
 				if (note) {
-					note.get() (DCP_NOTE, String::compose ("XYZ value %1 out of range", cz));
+					note.get()(NoteType::NOTE, String::compose("XYZ value %1 out of range", cz));
 				}
 				cz = max (min (cz, 4095), 0);
 			}
@@ -243,14 +230,11 @@ dcp::xyz_to_rgb (
 	}
 }
 
-/** @param conversion Colour conversion.
- *  @param matrix Filled in with the product of the RGB to XYZ matrix, the Bradford transform and the DCI companding.
- */
 void
 dcp::combined_rgb_to_xyz (ColourConversion const & conversion, double* matrix)
 {
-	boost::numeric::ublas::matrix<double> const rgb_to_xyz = conversion.rgb_to_xyz ();
-	boost::numeric::ublas::matrix<double> const bradford = conversion.bradford ();
+	auto const rgb_to_xyz = conversion.rgb_to_xyz ();
+	auto const bradford = conversion.bradford ();
 
 	matrix[0] = (bradford (0, 0) * rgb_to_xyz (0, 0) + bradford (0, 1) * rgb_to_xyz (1, 0) + bradford (0, 2) * rgb_to_xyz (2, 0))
 		* DCI_COEFFICIENT * 65535;
@@ -272,12 +256,7 @@ dcp::combined_rgb_to_xyz (ColourConversion const & conversion, double* matrix)
 		* DCI_COEFFICIENT * 65535;
 }
 
-/** @param rgb RGB data; packed RGB 16:16:16, 48bpp, 16R, 16G, 16B,
- *  with the 2-byte value for each R/G/B component stored as
- *  little-endian; i.e. AV_PIX_FMT_RGB48LE.
- *  @param size size of RGB image in pixels.
- *  @param size stride of RGB data in pixels.
- */
+
 shared_ptr<dcp::OpenJPEGImage>
 dcp::rgb_to_xyz (
 	uint8_t const * rgb,
@@ -287,7 +266,7 @@ dcp::rgb_to_xyz (
 	optional<NoteHandler> note
 	)
 {
-	shared_ptr<OpenJPEGImage> xyz (new OpenJPEGImage (size));
+	auto xyz = make_shared<OpenJPEGImage>(size);
 
 	struct {
 		double r, g, b;
@@ -297,8 +276,8 @@ dcp::rgb_to_xyz (
 		double x, y, z;
 	} d;
 
-	double const * lut_in = conversion.in()->lut (12, false);
-	double const * lut_out = conversion.out()->lut (16, true);
+	auto const * lut_in = conversion.in()->lut (12, false);
+	auto const * lut_out = conversion.out()->lut (16, true);
 
 	/* This is is the product of the RGB to XYZ matrix, the Bradford transform and the DCI companding */
 	double fast_matrix[9];
@@ -309,7 +288,7 @@ dcp::rgb_to_xyz (
 	int* xyz_y = xyz->data (1);
 	int* xyz_z = xyz->data (2);
 	for (int y = 0; y < size.height; ++y) {
-		uint16_t const * p = reinterpret_cast<uint16_t const *> (rgb + y * stride);
+		auto p = reinterpret_cast<uint16_t const *> (rgb + y * stride);
 		for (int x = 0; x < size.width; ++x) {
 
 			/* In gamma LUT (converting 16-bit to 12-bit) */
@@ -343,7 +322,7 @@ dcp::rgb_to_xyz (
 	}
 
 	if (clamped && note) {
-		note.get() (DCP_NOTE, String::compose ("%1 XYZ value(s) clamped", clamped));
+		note.get()(NoteType::NOTE, String::compose("%1 XYZ value(s) clamped", clamped));
 	}
 
 	return xyz;

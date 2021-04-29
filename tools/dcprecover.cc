@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2018 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2018-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,23 +31,29 @@
     files in the program, then also delete it here.
 */
 
-#include "dcp.h"
-#include "cpl.h"
-#include "exceptions.h"
+
 #include "asset_factory.h"
+#include "cpl.h"
+#include "dcp.h"
+#include "exceptions.h"
 #include "reel_asset.h"
+#include "warnings.h"
 #include <getopt.h>
+LIBDCP_DISABLE_WARNINGS
 #include <libxml++/libxml++.h>
+LIBDCP_ENABLE_WARNINGS
 #include <boost/filesystem.hpp>
-#include <boost/foreach.hpp>
 #include <iostream>
+
 
 using std::cerr;
 using std::cout;
+using std::make_shared;
+using std::shared_ptr;
 using std::string;
-using std::list;
-using boost::shared_ptr;
+using std::vector;
 using boost::optional;
+
 
 static void
 help (string n)
@@ -57,14 +63,18 @@ help (string n)
 	     << "  -o, --output       output DCP directory\n";
 }
 
+
 void progress (float f)
 {
 	cout << (f * 100) << "%               \r";
 }
 
+
 int
 main (int argc, char* argv[])
 {
+	dcp::init ();
+
 	int option_index = 0;
 	optional<boost::filesystem::path> output;
 	while (true) {
@@ -100,25 +110,25 @@ main (int argc, char* argv[])
 	/* Try to read it and report errors */
 
 	dcp::DCP dcp (dcp_dir);
-	dcp::DCP::ReadErrors errors;
+	vector<dcp::VerificationNote> notes;
 	try {
-		dcp.read (true, &errors, true);
-	} catch (dcp::DCPReadError& e) {
+		dcp.read (&notes, true);
+	} catch (dcp::ReadError& e) {
 		cout << "Error:" <<  e.what() << "\n";
 	}
 
-	BOOST_FOREACH (shared_ptr<dcp::DCPReadError> i, errors) {
-		cout << "Error: " << i->what() << "\n";
+	for (auto i: notes) {
+		cout << "Error: " << dcp::note_to_string(i) << "\n";
 	}
 
 	/* Look for a CPL */
 
 	shared_ptr<dcp::CPL> cpl;
-	for (boost::filesystem::directory_iterator i(dcp_dir); i != boost::filesystem::directory_iterator(); ++i) {
-		if (i->path().extension() == ".xml") {
+	for (auto i: boost::filesystem::directory_iterator(dcp_dir)) {
+		if (i.path().extension() == ".xml") {
 			try {
-				cpl.reset(new dcp::CPL(i->path()));
-			} catch (dcp::DCPReadError& e) {
+				cpl = make_shared<dcp::CPL>(i.path());
+			} catch (dcp::ReadError& e) {
 				cout << "Error: " << e.what() << "\n";
 			} catch (xmlpp::parse_error& e) {
 				cout << "Error: " << e.what() << "\n";
@@ -135,17 +145,17 @@ main (int argc, char* argv[])
 		}
 
 		/* Read all MXF assets */
-		list<shared_ptr<dcp::Asset> > assets;
-		for (boost::filesystem::directory_iterator i(dcp_dir); i != boost::filesystem::directory_iterator(); ++i) {
-			if (i->path().extension() == ".mxf") {
+		vector<shared_ptr<dcp::Asset>> assets;
+		for (auto i: boost::filesystem::directory_iterator(dcp_dir)) {
+			if (i.path().extension() == ".mxf") {
 				try {
-					shared_ptr<dcp::Asset> asset = dcp::asset_factory(i->path(), true);
-					asset->set_file (*output / i->path().filename());
-					cout << "Hashing " << i->path().filename() << "\n";
+					auto asset = dcp::asset_factory(i.path(), true);
+					asset->set_file (*output / i.path().filename());
+					cout << "Hashing " << i.path().filename() << "\n";
 					asset->hash (&progress);
 					cout << "100%                     \n";
 					assets.push_back (asset);
-				} catch (dcp::DCPReadError& e) {
+				} catch (dcp::ReadError& e) {
 					cout << "Error: " << e.what() << "\n";
 				}
 			}
@@ -154,7 +164,7 @@ main (int argc, char* argv[])
 		dcp::DCP fixed (*output);
 		fixed.add (cpl);
 		fixed.resolve_refs (assets);
-		fixed.write_xml (dcp::INTEROP);
+		fixed.write_xml ();
 		cout << "Fixed XML files written to " << output->string() << "\n";
 	}
 

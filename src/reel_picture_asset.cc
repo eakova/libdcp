@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2014-2016 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2014-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,39 +31,45 @@
     files in the program, then also delete it here.
 */
 
-/** @file  src/reel_picture_asset.h
- *  @brief ReelPictureAsset class.
+
+/** @file  src/reel_picture_asset.cc
+ *  @brief ReelPictureAsset class
  */
 
-#include "reel_picture_asset.h"
-#include "picture_asset.h"
-#include "dcp_assert.h"
-#include "raw_convert.h"
+
 #include "compose.hpp"
+#include "dcp_assert.h"
+#include "picture_asset.h"
+#include "raw_convert.h"
+#include "reel_picture_asset.h"
+#include "warnings.h"
 #include <libcxml/cxml.h>
+LIBDCP_DISABLE_WARNINGS
 #include <libxml++/libxml++.h>
+LIBDCP_ENABLE_WARNINGS
 #include <iomanip>
 #include <cmath>
 
+
 using std::bad_cast;
 using std::string;
-using boost::shared_ptr;
-using boost::dynamic_pointer_cast;
+using std::shared_ptr;
+using std::dynamic_pointer_cast;
 using boost::optional;
 using namespace dcp;
 
+
 ReelPictureAsset::ReelPictureAsset (shared_ptr<PictureAsset> asset, int64_t entry_point)
-	: ReelAsset (asset->id(), asset->edit_rate(), asset->intrinsic_duration(), entry_point)
-	, ReelMXF (asset, asset->key_id())
+	: ReelFileAsset (asset, asset->key_id(), asset->id(), asset->edit_rate(), asset->intrinsic_duration(), entry_point)
 	, _frame_rate (asset->frame_rate ())
 	, _screen_aspect_ratio (asset->screen_aspect_ratio ())
 {
 
 }
 
+
 ReelPictureAsset::ReelPictureAsset (shared_ptr<const cxml::Node> node)
-	: ReelAsset (node)
-	, ReelMXF (node)
+	: ReelFileAsset (node)
 {
 	_frame_rate = Fraction (node->string_child ("FrameRate"));
 	try {
@@ -79,13 +85,15 @@ ReelPictureAsset::ReelPictureAsset (shared_ptr<const cxml::Node> node)
 	}
 }
 
+
 xmlpp::Node*
 ReelPictureAsset::write_to_cpl (xmlpp::Node* node, Standard standard) const
 {
-	xmlpp::Node* asset = write_to_cpl_base (node, standard, hash());
+	auto asset = ReelFileAsset::write_to_cpl (node, standard);
 
 	asset->add_child("FrameRate")->add_child_text(String::compose("%1 %2", _frame_rate.numerator, _frame_rate.denominator));
-	if (standard == INTEROP) {
+
+	if (standard == Standard::INTEROP) {
 
 		/* Allowed values for this tag from the standard */
 		float allowed[] = { 1.33, 1.66, 1.77, 1.85, 2.00, 2.39 };
@@ -105,27 +113,16 @@ ReelPictureAsset::write_to_cpl (xmlpp::Node* node, Standard standard) const
 			}
 		}
 
-		asset->add_child ("ScreenAspectRatio")->add_child_text (raw_convert<string> (closest.get(), 2, true));
+		asset->add_child("ScreenAspectRatio")->add_child_text(raw_convert<string>(closest.get(), 2, true));
 	} else {
-		asset->add_child ("ScreenAspectRatio")->add_child_text (
+		asset->add_child("ScreenAspectRatio")->add_child_text(
 			String::compose ("%1 %2", _screen_aspect_ratio.numerator, _screen_aspect_ratio.denominator)
 			);
 	}
 
-        if (key_id ()) {
-		/* Find <Hash> */
-		xmlpp::Node* hash = find_child (asset, "Hash");
-		asset->add_child_before(hash, "KeyId")->add_child_text("urn:uuid:" + key_id().get());
-        }
-
 	return asset;
 }
 
-string
-ReelPictureAsset::key_type () const
-{
-	return "MDIK";
-}
 
 bool
 ReelPictureAsset::equals (shared_ptr<const ReelPictureAsset> other, EqualityOptions opt, NoteHandler note) const
@@ -133,22 +130,22 @@ ReelPictureAsset::equals (shared_ptr<const ReelPictureAsset> other, EqualityOpti
 	if (!asset_equals (other, opt, note)) {
 		return false;
 	}
-	if (!mxf_equals (other, opt, note)) {
+	if (!file_asset_equals (other, opt, note)) {
 		return false;
 	}
 
-	shared_ptr<const ReelPictureAsset> rpa = dynamic_pointer_cast<const ReelPictureAsset> (other);
+	auto rpa = dynamic_pointer_cast<const ReelPictureAsset>(other);
 	if (!rpa) {
 		return false;
 	}
 
 	if (_frame_rate != rpa->_frame_rate) {
-		note (DCP_ERROR, "frame rates differ in reel");
+		note (NoteType::ERROR, "frame rates differ in reel");
 		return false;
 	}
 
 	if (_screen_aspect_ratio != rpa->_screen_aspect_ratio) {
-		note (DCP_ERROR, "screen aspect ratios differ in reel");
+		note (NoteType::ERROR, "screen aspect ratios differ in reel");
 		return false;
 	}
 

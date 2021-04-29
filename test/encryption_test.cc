@@ -42,7 +42,6 @@
 #include "sound_asset.h"
 #include "reel.h"
 #include "test.h"
-#include "file.h"
 #include "subtitle_asset.h"
 #include "reel_mono_picture_asset.h"
 #include "reel_sound_asset.h"
@@ -51,11 +50,14 @@
 #include <asdcp/KM_util.h>
 #include <sndfile.h>
 #include <boost/test/unit_test.hpp>
-#include <boost/shared_ptr.hpp>
+#include <memory>
+
 
 using std::vector;
 using std::string;
-using boost::shared_ptr;
+using std::shared_ptr;
+using std::make_shared;
+
 
 /** Load a certificate chain from build/test/data/ *.pem and then build
  *  an encrypted DCP and a KDM using it.
@@ -65,59 +67,53 @@ BOOST_AUTO_TEST_CASE (encryption_test)
 	boost::filesystem::remove_all ("build/test/signer");
 	boost::filesystem::create_directory ("build/test/signer");
 
-	Kumu::cth_test = true;
+	RNGFixer fix;
 
 	dcp::MXFMetadata mxf_metadata;
 	mxf_metadata.company_name = "OpenDCP";
 	mxf_metadata.product_name = "OpenDCP";
 	mxf_metadata.product_version = "0.0.25";
 
-	dcp::XMLMetadata xml_metadata;
-	xml_metadata.annotation_text = "A Test DCP";
-	xml_metadata.issuer = "OpenDCP 0.0.25";
-	xml_metadata.creator = "OpenDCP 0.0.25";
-	xml_metadata.issue_date = "2012-07-17T04:45:18+00:00";
-
 	boost::filesystem::remove_all ("build/test/DCP/encryption_test");
 	boost::filesystem::create_directories ("build/test/DCP/encryption_test");
 	dcp::DCP d ("build/test/DCP/encryption_test");
 
 	/* Use test/ref/crypt so this test is repeatable */
-	shared_ptr<dcp::CertificateChain> signer (new dcp::CertificateChain ());
-	signer->add (dcp::Certificate (dcp::file_to_string ("test/ref/crypt/ca.self-signed.pem")));
-	signer->add (dcp::Certificate (dcp::file_to_string ("test/ref/crypt/intermediate.signed.pem")));
-	signer->add (dcp::Certificate (dcp::file_to_string ("test/ref/crypt/leaf.signed.pem")));
-	signer->set_key (dcp::file_to_string ("test/ref/crypt/leaf.key"));
+	auto signer = make_shared<dcp::CertificateChain>();
+	signer->add (dcp::Certificate(dcp::file_to_string("test/ref/crypt/ca.self-signed.pem")));
+	signer->add (dcp::Certificate(dcp::file_to_string("test/ref/crypt/intermediate.signed.pem")));
+	signer->add (dcp::Certificate(dcp::file_to_string("test/ref/crypt/leaf.signed.pem")));
+	signer->set_key (dcp::file_to_string("test/ref/crypt/leaf.key"));
 
-	shared_ptr<dcp::CPL> cpl (new dcp::CPL ("A Test DCP", dcp::FEATURE));
+	auto cpl = make_shared<dcp::CPL>("A Test DCP", dcp::ContentKind::FEATURE, dcp::Standard::SMPTE);
 
 	dcp::Key key;
 
-	shared_ptr<dcp::MonoPictureAsset> mp (new dcp::MonoPictureAsset (dcp::Fraction (24, 1), dcp::SMPTE));
+	auto mp = make_shared<dcp::MonoPictureAsset>(dcp::Fraction (24, 1), dcp::Standard::SMPTE);
 	mp->set_metadata (mxf_metadata);
 	mp->set_key (key);
 
-	shared_ptr<dcp::PictureAssetWriter> writer = mp->start_write ("build/test/DCP/encryption_test/video.mxf", false);
-	dcp::File j2c ("test/data/32x32_red_square.j2c");
+	auto writer = mp->start_write ("build/test/DCP/encryption_test/video.mxf", false);
+	dcp::ArrayData j2c ("test/data/flat_red.j2c");
 	for (int i = 0; i < 24; ++i) {
 		writer->write (j2c.data (), j2c.size ());
 	}
 	writer->finalize ();
 
-	shared_ptr<dcp::SoundAsset> ms (new dcp::SoundAsset (dcp::Fraction (24, 1), 48000, 1, dcp::SMPTE));
+	auto ms = make_shared<dcp::SoundAsset>(dcp::Fraction (24, 1), 48000, 1, dcp::LanguageTag("en-GB"), dcp::Standard::SMPTE);
 	ms->set_metadata (mxf_metadata);
 	ms->set_key (key);
-	shared_ptr<dcp::SoundAssetWriter> sound_writer = ms->start_write ("build/test/DCP/encryption_test/audio.mxf");
+	auto sound_writer = ms->start_write ("build/test/DCP/encryption_test/audio.mxf");
 
 	SF_INFO info;
 	info.format = 0;
-	SNDFILE* sndfile = sf_open ("test/data/1s_24-bit_48k_silence.wav", SFM_READ, &info);
+	auto sndfile = sf_open ("test/data/1s_24-bit_48k_silence.wav", SFM_READ, &info);
 	BOOST_CHECK (sndfile);
 	float buffer[4096*6];
 	float* channels[1];
 	channels[0] = buffer;
-	while (1) {
-		sf_count_t N = sf_readf_float (sndfile, buffer, 4096);
+	while (true) {
+		auto N = sf_readf_float (sndfile, buffer, 4096);
 		sound_writer->write (channels, N);
 		if (N < 4096) {
 			break;
@@ -126,41 +122,44 @@ BOOST_AUTO_TEST_CASE (encryption_test)
 
 	sound_writer->finalize ();
 
-	cpl->add (shared_ptr<dcp::Reel> (new dcp::Reel (
-						 shared_ptr<dcp::ReelMonoPictureAsset> (new dcp::ReelMonoPictureAsset (mp, 0)),
-						 shared_ptr<dcp::ReelSoundAsset> (new dcp::ReelSoundAsset (ms, 0)),
-						 shared_ptr<dcp::ReelSubtitleAsset> ()
-						 )));
-	cpl->set_content_version_id ("urn:uri:81fb54df-e1bf-4647-8788-ea7ba154375b_2012-07-17T04:45:18+00:00");
-	cpl->set_content_version_label_text ("81fb54df-e1bf-4647-8788-ea7ba154375b_2012-07-17T04:45:18+00:00");
-	cpl->set_metadata (xml_metadata);
+	cpl->add (make_shared<dcp::Reel>(
+			make_shared<dcp::ReelMonoPictureAsset>(mp, 0),
+			make_shared<dcp::ReelSoundAsset>(ms, 0),
+			shared_ptr<dcp::ReelSubtitleAsset>()
+			));
+	cpl->set_content_version (
+		dcp::ContentVersion("urn:uri:81fb54df-e1bf-4647-8788-ea7ba154375b_2012-07-17T04:45:18+00:00", "81fb54df-e1bf-4647-8788-ea7ba154375b_2012-07-17T04:45:18+00:00")
+		);
+	cpl->set_annotation_text ("A Test DCP");
+	cpl->set_issuer ("OpenDCP 0.0.25");
+	cpl->set_creator ("OpenDCP 0.0.25");
+	cpl->set_issue_date ("2012-07-17T04:45:18+00:00");
 
 	d.add (cpl);
 
-	xml_metadata.annotation_text = "Created by libdcp";
-	d.write_xml (dcp::SMPTE, xml_metadata, signer);
+	d.write_xml ("OpenDCP 0.0.25", "OpenDCP 0.0.25", "2012-07-17T04:45:18+00:00", "Created by libdcp", signer);
 
 	dcp::DecryptedKDM kdm (
 		cpl,
 		key,
-		dcp::LocalTime ("2013-01-01T00:00:00+00:00"),
+		dcp::LocalTime ("2016-01-01T00:00:00+00:00"),
 		dcp::LocalTime ("2017-01-08T00:00:00+00:00"),
 		"libdcp",
 		"test",
 		"2012-07-17T04:45:18+00:00"
 		);
 
-	kdm.encrypt (signer, signer->leaf(), vector<string>(), dcp::MODIFIED_TRANSITIONAL_1, true, 0).as_xml ("build/test/encryption_test.kdm.xml");
+	kdm.encrypt (signer, signer->leaf(), vector<string>(), dcp::Formulation::MODIFIED_TRANSITIONAL_1, true, 0).as_xml("build/test/encryption_test.kdm.xml");
 
 	int r = system (
 		"xmllint --path schema --nonet --noout --schema schema/SMPTE-430-1-2006-Amd-1-2009-KDM.xsd build/test/encryption_test.kdm.xml "
 		"> build/test/xmllint.log 2>&1 < /dev/null"
 		);
 
-#ifdef LIBDCP_POSIX
-	BOOST_CHECK_EQUAL (WEXITSTATUS (r), 0);
-#else
+#ifdef LIBDCP_WINDOWS
 	BOOST_CHECK_EQUAL (r, 0);
+#else
+	BOOST_CHECK_EQUAL (WEXITSTATUS (r), 0);
 #endif
 
 	r = system ("xmlsec1 verify "
@@ -171,9 +170,9 @@ BOOST_AUTO_TEST_CASE (encryption_test)
 		"--id-attr:Id http://www.smpte-ra.org/schemas/430-3/2006/ETM:AuthenticatedPrivate "
 		    "build/test/encryption_test.kdm.xml > build/test/xmlsec1.log 2>&1 < /dev/null");
 
-#ifdef LIBDCP_POSIX
-	BOOST_CHECK_EQUAL (WEXITSTATUS (r), 0);
-#else
+#ifdef LIBDCP_WINDOWS
 	BOOST_CHECK_EQUAL (r, 0);
+#else
+	BOOST_CHECK_EQUAL (WEXITSTATUS (r), 0);
 #endif
 }

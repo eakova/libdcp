@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2018 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2018-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,15 +31,24 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/subtitle_image.cc
+ *  @brief SubtitleImage class
+ */
+
+
 #include "subtitle_image.h"
 #include "util.h"
 
+
 using std::ostream;
 using std::string;
+using std::shared_ptr;
 using namespace dcp;
 
+
 SubtitleImage::SubtitleImage (
-	Data png_image,
+	ArrayData png_image,
 	Time in,
 	Time out,
 	float h_position,
@@ -56,8 +65,9 @@ SubtitleImage::SubtitleImage (
 
 }
 
+
 SubtitleImage::SubtitleImage (
-	Data png_image,
+	ArrayData png_image,
 	string id,
 	Time in,
 	Time out,
@@ -75,12 +85,14 @@ SubtitleImage::SubtitleImage (
 
 }
 
+
 void
 SubtitleImage::read_png_file (boost::filesystem::path file)
 {
 	_file = file;
-	_png_image = Data (file);
+	_png_image = ArrayData (file);
 }
+
 
 void
 SubtitleImage::write_png_file (boost::filesystem::path file) const
@@ -88,6 +100,7 @@ SubtitleImage::write_png_file (boost::filesystem::path file) const
 	_file = file;
 	png_image().write (file);
 }
+
 
 bool
 dcp::operator== (SubtitleImage const & a, SubtitleImage const & b)
@@ -106,11 +119,79 @@ dcp::operator== (SubtitleImage const & a, SubtitleImage const & b)
 		);
 }
 
+
 bool
 dcp::operator!= (SubtitleImage const & a, SubtitleImage const & b)
 {
 	return !(a == b);
 }
+
+
+bool
+SubtitleImage::equals (shared_ptr<SubtitleImage> other, EqualityOptions options, NoteHandler note)
+{
+	if (png_image() != other->png_image()) {
+		note (NoteType::ERROR, "subtitle image PNG data differs");
+		if (options.export_differing_subtitles) {
+			string const base = "dcpdiff_subtitle_";
+			if (boost::filesystem::exists(base + "A.png")) {
+				note (NoteType::ERROR, "could not export subtitle as " + base + "A.png already exists");
+			} else {
+				png_image().write(base + "A.png");
+			}
+			if (boost::filesystem::exists(base + "B.png")) {
+				note (NoteType::ERROR, "could not export subtitle as " + base + "B.png already exists");
+			} else {
+				other->png_image().write(base + "B.png");
+			}
+			options.export_differing_subtitles = false;
+		}
+		return false;
+	}
+
+	if (in() != other->in()) {
+		note (NoteType::ERROR, "subtitle in times differ");
+		return false;
+	}
+
+	if (out() != other->out()) {
+		note (NoteType::ERROR, "subtitle out times differ");
+		return false;
+	}
+
+	if (h_position() != other->h_position()) {
+		note (NoteType::ERROR, "subtitle horizontal positions differ");
+		return false;
+	}
+
+	if (h_align() != other->h_align()) {
+		note (NoteType::ERROR, "subtitle horizontal alignments differ");
+		return false;
+	}
+
+	if (v_position() != other->v_position()) {
+		note (NoteType::ERROR, "subtitle vertical positions differ");
+		return false;
+	}
+
+	if (v_align() != other->v_align()) {
+		note (NoteType::ERROR, "subtitle vertical alignments differ");
+		return false;
+	}
+
+	if (fade_up_time() != other->fade_up_time()) {
+		note (NoteType::ERROR, "subtitle fade-up times differ");
+		return false;
+	}
+
+	if (fade_down_time() != other->fade_down_time()) {
+		note (NoteType::ERROR, "subtitle fade-down times differ");
+		return false;
+	}
+
+	return true;
+}
+
 
 ostream&
 dcp::operator<< (ostream& s, SubtitleImage const & sub)
@@ -122,3 +203,4 @@ dcp::operator<< (ostream& s, SubtitleImage const & sub)
 
 	return s;
 }
+

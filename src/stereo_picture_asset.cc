@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2016 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,6 +31,12 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/stereo_picture_asset.cc
+ *  @brief StereoPictureAsset class
+ */
+
+
 #include "stereo_picture_asset.h"
 #include "stereo_picture_frame.h"
 #include "exceptions.h"
@@ -39,36 +45,39 @@
 #include "dcp_assert.h"
 #include <asdcp/AS_DCP.h>
 
+
 using std::string;
 using std::pair;
 using std::make_pair;
-using boost::shared_ptr;
-using boost::dynamic_pointer_cast;
+using std::shared_ptr;
+using std::dynamic_pointer_cast;
 using namespace dcp;
+
 
 StereoPictureAsset::StereoPictureAsset (boost::filesystem::path file)
 	: PictureAsset (file)
 {
 	ASDCP::JP2K::MXFSReader reader;
-	Kumu::Result_t r = reader.OpenRead (file.string().c_str());
-	if (ASDCP_FAILURE (r)) {
-		boost::throw_exception (MXFFileError ("could not open MXF file for reading", file.string(), r));
+	auto r = reader.OpenRead (file.string().c_str());
+	if (ASDCP_FAILURE(r)) {
+		boost::throw_exception (MXFFileError("could not open MXF file for reading", file.string(), r));
 	}
 
 	ASDCP::JP2K::PictureDescriptor desc;
-	if (ASDCP_FAILURE (reader.FillPictureDescriptor (desc))) {
-		boost::throw_exception (DCPReadError ("could not read video MXF information"));
+	if (ASDCP_FAILURE (reader.FillPictureDescriptor(desc))) {
+		boost::throw_exception (ReadError("could not read video MXF information"));
 	}
 
 	read_picture_descriptor (desc);
 
 	ASDCP::WriterInfo info;
-	if (ASDCP_FAILURE (reader.FillWriterInfo (info))) {
-		boost::throw_exception (DCPReadError ("could not read video MXF information"));
+	if (ASDCP_FAILURE (reader.FillWriterInfo(info))) {
+		boost::throw_exception (ReadError("could not read video MXF information"));
 	}
 
 	_id = read_writer_info (info);
 }
+
 
 StereoPictureAsset::StereoPictureAsset (Fraction edit_rate, Standard standard)
 	: PictureAsset (edit_rate, standard)
@@ -76,30 +85,33 @@ StereoPictureAsset::StereoPictureAsset (Fraction edit_rate, Standard standard)
 
 }
 
+
 shared_ptr<PictureAssetWriter>
 StereoPictureAsset::start_write (boost::filesystem::path file, bool overwrite)
 {
-	return shared_ptr<StereoPictureAssetWriter> (new StereoPictureAssetWriter (this, file, overwrite));
+	return shared_ptr<StereoPictureAssetWriter> (new StereoPictureAssetWriter(this, file, overwrite));
 }
+
 
 shared_ptr<StereoPictureAssetReader>
 StereoPictureAsset::start_read () const
 {
-	return shared_ptr<StereoPictureAssetReader> (new StereoPictureAssetReader (this, key(), standard()));
+	return shared_ptr<StereoPictureAssetReader> (new StereoPictureAssetReader(this, key(), standard()));
 }
+
 
 bool
 StereoPictureAsset::equals (shared_ptr<const Asset> other, EqualityOptions opt, NoteHandler note) const
 {
 	ASDCP::JP2K::MXFSReader reader_A;
-	DCP_ASSERT (file ());
-	Kumu::Result_t r = reader_A.OpenRead (file()->string().c_str());
+	DCP_ASSERT (file());
+	auto r = reader_A.OpenRead (file()->string().c_str());
 	if (ASDCP_FAILURE (r)) {
 		boost::throw_exception (MXFFileError ("could not open MXF file for reading", file()->string(), r));
 	}
 
 	ASDCP::JP2K::MXFSReader reader_B;
-	DCP_ASSERT (other->file ());
+	DCP_ASSERT (other->file());
 	r = reader_B.OpenRead (other->file()->string().c_str());
 	if (ASDCP_FAILURE (r)) {
 		boost::throw_exception (MXFFileError ("could not open MXF file for reading", other->file()->string(), r));
@@ -107,22 +119,22 @@ StereoPictureAsset::equals (shared_ptr<const Asset> other, EqualityOptions opt, 
 
 	ASDCP::JP2K::PictureDescriptor desc_A;
 	if (ASDCP_FAILURE (reader_A.FillPictureDescriptor (desc_A))) {
-		boost::throw_exception (DCPReadError ("could not read video MXF information"));
+		boost::throw_exception (ReadError ("could not read video MXF information"));
 	}
 	ASDCP::JP2K::PictureDescriptor desc_B;
 	if (ASDCP_FAILURE (reader_B.FillPictureDescriptor (desc_B))) {
-		boost::throw_exception (DCPReadError ("could not read video MXF information"));
+		boost::throw_exception (ReadError ("could not read video MXF information"));
 	}
 
 	if (!descriptor_equals (desc_A, desc_B, note)) {
 		return false;
 	}
 
-	shared_ptr<const StereoPictureAsset> other_picture = dynamic_pointer_cast<const StereoPictureAsset> (other);
+	auto other_picture = dynamic_pointer_cast<const StereoPictureAsset> (other);
 	DCP_ASSERT (other_picture);
 
-	shared_ptr<const StereoPictureAssetReader> reader = start_read ();
-	shared_ptr<const StereoPictureAssetReader> other_reader = other_picture->start_read ();
+	auto reader = start_read ();
+	auto other_reader = other_picture->start_read ();
 
 	bool result = true;
 
@@ -132,18 +144,18 @@ StereoPictureAsset::equals (shared_ptr<const Asset> other, EqualityOptions opt, 
 		try {
 			frame_A = reader->get_frame (i);
 			frame_B = other_reader->get_frame (i);
-		} catch (DCPReadError& e) {
+		} catch (ReadError& e) {
 			/* If there was a problem reading the frame data we'll just assume
 			   the two frames are not equal.
 			*/
-			note (DCP_ERROR, e.what ());
+			note (NoteType::ERROR, e.what ());
 			return false;
 		}
 
 		if (!frame_buffer_equals (
 			    i, opt, note,
-			    frame_A->left_j2k_data(), frame_A->left_j2k_size(),
-			    frame_B->left_j2k_data(), frame_B->left_j2k_size()
+			    frame_A->left()->data(), frame_A->left()->size(),
+			    frame_B->left()->data(), frame_B->left()->size()
 			    )) {
 			result = false;
 			if (!opt.keep_going) {
@@ -153,8 +165,8 @@ StereoPictureAsset::equals (shared_ptr<const Asset> other, EqualityOptions opt, 
 
 		if (!frame_buffer_equals (
 			    i, opt, note,
-			    frame_A->right_j2k_data(), frame_A->right_j2k_size(),
-			    frame_B->right_j2k_data(), frame_B->right_j2k_size()
+			    frame_A->right()->data(), frame_A->right()->size(),
+			    frame_B->right()->data(), frame_B->right()->size()
 			    )) {
 			result = false;
 			if (!opt.keep_going) {

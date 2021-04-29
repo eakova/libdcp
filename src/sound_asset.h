@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2016 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,23 +31,40 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/sound_asset.h
  *  @brief SoundAsset class
  */
 
+
 #ifndef LIBDCP_SOUND_ASSET_H
 #define LIBDCP_SOUND_ASSET_H
 
+
 #include "mxf.h"
 #include "types.h"
+#include "language_tag.h"
 #include "metadata.h"
 #include "sound_frame.h"
 #include "sound_asset_reader.h"
 
+
+namespace dcp {
+	class SoundAsset;
+}
+
+
+extern std::shared_ptr<dcp::SoundAsset> simple_sound (
+	boost::filesystem::path path, std::string suffix, dcp::MXFMetadata mxf_meta, std::string language, int frames, int sample_rate
+	);
+
+
 namespace dcp
 {
 
+
 class SoundAssetWriter;
+
 
 /** @class SoundAsset
  *  @brief Representation of a sound asset
@@ -56,16 +73,16 @@ class SoundAsset : public Asset, public MXF
 {
 public:
 	explicit SoundAsset (boost::filesystem::path file);
-	SoundAsset (Fraction edit_rate, int sampling_rate, int channels, Standard standard);
+	SoundAsset (Fraction edit_rate, int sampling_rate, int channels, LanguageTag language, Standard standard);
 
-	boost::shared_ptr<SoundAssetWriter> start_write (boost::filesystem::path file);
-	boost::shared_ptr<SoundAssetReader> start_read () const;
+	std::shared_ptr<SoundAssetWriter> start_write (boost::filesystem::path file, bool atmos_sync = false);
+	std::shared_ptr<SoundAssetReader> start_read () const;
 
 	bool equals (
-		boost::shared_ptr<const Asset> other,
+		std::shared_ptr<const Asset> other,
 		EqualityOptions opt,
 		NoteHandler note
-		) const;
+		) const override;
 
 	/** @return number of channels */
 	int channels () const {
@@ -85,13 +102,20 @@ public:
 		return _intrinsic_duration;
 	}
 
+	boost::optional<std::string> language () const {
+		return _language;
+	}
+
 	static bool valid_mxf (boost::filesystem::path);
 	static std::string static_pkl_type (Standard standard);
 
 private:
 	friend class SoundAssetWriter;
+	friend std::shared_ptr<dcp::SoundAsset> (::simple_sound) (
+		boost::filesystem::path path, std::string suffix, dcp::MXFMetadata mxf_meta, std::string language, int frames, int sample_rate
+		);
 
-	std::string pkl_type (Standard standard) const {
+	std::string pkl_type (Standard standard) const override {
 		return static_pkl_type (standard);
 	}
 
@@ -99,11 +123,14 @@ private:
 	/** The total length of this content in video frames.  The amount of
 	 *  content presented may be less than this.
 	 */
-	int64_t _intrinsic_duration;
-	int _channels;      ///< number of channels
-	int _sampling_rate; ///< sampling rate in Hz
+	int64_t _intrinsic_duration = 0;
+	int _channels = 0;      ///< number of channels
+	int _sampling_rate = 0; ///< sampling rate in Hz
+	boost::optional<std::string> _language;
 };
 
+
 }
+
 
 #endif

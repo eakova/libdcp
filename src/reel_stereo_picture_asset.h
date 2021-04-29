@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2014-2019 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2014-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,44 +31,52 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/reel_stereo_picture_asset.h
- *  @brief ReelStereoPictureAsset class.
+ *  @brief ReelStereoPictureAsset class
  */
+
 
 #ifndef LIBDCP_REEL_STEREO_PICTURE_ASSET_H
 #define LIBDCP_REEL_STEREO_PICTURE_ASSET_H
 
+
 #include "reel_picture_asset.h"
 #include "stereo_picture_asset.h"
 
+
 namespace dcp {
+
 
 class StereoPictureAsset;
 
+
 /** @class ReelStereoPictureAsset
- *  @brief Part of a Reel's description which refers to a stereoscopic picture asset.
+ *  @brief Part of a Reel's description which refers to a stereoscopic picture asset
  */
 class ReelStereoPictureAsset : public ReelPictureAsset
 {
 public:
-	ReelStereoPictureAsset (boost::shared_ptr<StereoPictureAsset> content, int64_t entry_point);
-	explicit ReelStereoPictureAsset (boost::shared_ptr<const cxml::Node>);
+	ReelStereoPictureAsset (std::shared_ptr<StereoPictureAsset> content, int64_t entry_point);
+	explicit ReelStereoPictureAsset (std::shared_ptr<const cxml::Node>);
 
 	/** @return the StereoPictureAsset that this object refers to */
-	boost::shared_ptr<const StereoPictureAsset> stereo_asset () const {
-		return asset_of_type<const StereoPictureAsset> ();
+	std::shared_ptr<const StereoPictureAsset> stereo_asset () const {
+		return asset_of_type<const StereoPictureAsset>();
 	}
 
 	/** @return the StereoPictureAsset that this object refers to */
-	boost::shared_ptr<StereoPictureAsset> stereo_asset () {
-		return asset_of_type<StereoPictureAsset> ();
+	std::shared_ptr<StereoPictureAsset> stereo_asset () {
+		return asset_of_type<StereoPictureAsset>();
 	}
 
 private:
-	std::string cpl_node_name (Standard standard) const;
-	std::pair<std::string, std::string> cpl_node_attribute (Standard standard) const;
+	std::string cpl_node_name (Standard standard) const override;
+	std::pair<std::string, std::string> cpl_node_attribute (Standard standard) const override;
 };
 
+
 }
+
 
 #endif

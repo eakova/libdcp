@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2018 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2018-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,6 +31,12 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/asset_factory.cc
+ *  @brief asset_factory() method
+ */
+
+
 #include "mono_picture_asset.h"
 #include "stereo_picture_asset.h"
 #include "sound_asset.h"
@@ -39,13 +45,16 @@
 #include "atmos_asset.h"
 #include "compose.hpp"
 #include "asset_factory.h"
-#include <boost/shared_ptr.hpp>
+#include <memory>
 
-using boost::shared_ptr;
+
+using std::shared_ptr;
+using std::make_shared;
 using namespace dcp;
 
+
 shared_ptr<Asset>
-dcp::asset_factory (boost::filesystem::path path, bool ignore_incorrect_picture_mxf_type)
+dcp::asset_factory (boost::filesystem::path path, bool ignore_incorrect_picture_mxf_type, bool* found_threed_marked_as_twod)
 {
 	/* XXX: asdcplib does not appear to support discovery of read MXFs standard
 	   (Interop / SMPTE)
@@ -53,35 +62,39 @@ dcp::asset_factory (boost::filesystem::path path, bool ignore_incorrect_picture_
 
 	ASDCP::EssenceType_t type;
 	if (ASDCP::EssenceType (path.string().c_str(), type) != ASDCP::RESULT_OK) {
-		throw DCPReadError ("Could not find essence type");
+		throw ReadError ("Could not find essence type");
 	}
 	switch (type) {
 	case ASDCP::ESS_UNKNOWN:
 	case ASDCP::ESS_MPEG2_VES:
-		throw DCPReadError ("MPEG2 video essences are not supported");
+		throw ReadError ("MPEG2 video essences are not supported");
 	case ASDCP::ESS_JPEG_2000:
 		try {
-			return shared_ptr<MonoPictureAsset> (new MonoPictureAsset (path));
+			return make_shared<MonoPictureAsset>(path);
 		} catch (dcp::MXFFileError& e) {
 			if (ignore_incorrect_picture_mxf_type && e.number() == ASDCP::RESULT_SFORMAT) {
 				/* Tried to load it as mono but the error says it's stereo; try that instead */
-				return shared_ptr<StereoPictureAsset> (new StereoPictureAsset (path));
+				auto stereo = make_shared<StereoPictureAsset>(path);
+				if (stereo && found_threed_marked_as_twod) {
+					*found_threed_marked_as_twod = true;
+				}
+				return stereo;
 			} else {
 				throw;
 			}
 		}
 	case ASDCP::ESS_PCM_24b_48k:
 	case ASDCP::ESS_PCM_24b_96k:
-		return shared_ptr<SoundAsset> (new SoundAsset (path));
+		return make_shared<SoundAsset>(path);
 	case ASDCP::ESS_JPEG_2000_S:
-		return shared_ptr<StereoPictureAsset> (new StereoPictureAsset (path));
+		return make_shared<StereoPictureAsset>(path);
 	case ASDCP::ESS_TIMED_TEXT:
-		return shared_ptr<SMPTESubtitleAsset> (new SMPTESubtitleAsset (path));
+		return make_shared<SMPTESubtitleAsset>(path);
 	case ASDCP::ESS_DCDATA_DOLBY_ATMOS:
-		return shared_ptr<AtmosAsset> (new AtmosAsset (path));
+		return make_shared<AtmosAsset>(path);
 	default:
-		throw DCPReadError (String::compose ("Unknown MXF essence type %1 in %2", int(type), path.string()));
+		throw ReadError (String::compose("Unknown MXF essence type %1 in %2", static_cast<int>(type), path.string()));
 	}
 
-	return shared_ptr<Asset>();
+	return {};
 }

@@ -43,13 +43,15 @@ using std::cout;
 using std::cerr;
 using std::list;
 using std::string;
-using boost::shared_ptr;
+using std::shared_ptr;
 using namespace dcp;
 
 /** Load a DCP then re-write its subtitle XML or MXF in-place */
 int
 main (int argc, char* argv[])
 {
+	dcp::init ();
+
 	try {
 		if (argc < 2) {
 			cerr << "Syntax: " << argv[0] << " <dcp>\n";
@@ -57,16 +59,12 @@ main (int argc, char* argv[])
 		}
 
 		DCP* dcp = new DCP (argv[1]);
-		dcp->read (true);
+		dcp->read ();
 
-		list<shared_ptr<CPL> > cpls = dcp->cpls ();
-		for (list<boost::shared_ptr<CPL> >::iterator i = cpls.begin(); i != cpls.end(); ++i) {
-
-			list<shared_ptr<Reel> > reels = (*i)->reels ();
-			for (list<shared_ptr<Reel> >::iterator j = reels.begin(); j != reels.end(); ++j) {
-
-				if ((*j)->main_subtitle()) {
-					(*j)->main_subtitle()->asset()->write ((*j)->main_subtitle()->asset()->file().get());
+		for (auto i: dcp->cpls()) {
+			for (auto j: i->reels()) {
+				if (j->main_subtitle()) {
+					j->main_subtitle()->asset()->write(j->main_subtitle()->asset()->file().get());
 				}
 			}
 		}
@@ -77,7 +75,7 @@ main (int argc, char* argv[])
 		cerr << e.what() << " (" << e.filename() << ") when reading " << argv[1] << "\n";
 		exit (EXIT_FAILURE);
 	}
-	catch (DCPReadError& e)
+	catch (ReadError& e)
 	{
 		cerr << e.what() << " when reading " << argv[1] << "\n";
 		exit (EXIT_FAILURE);

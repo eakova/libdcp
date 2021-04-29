@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2015 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2015-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,49 +31,42 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/data.h
+ *  @brief Data class
+ */
+
+
 #ifndef LIBDCP_DATA_H
 #define LIBDCP_DATA_H
 
-#include <boost/shared_array.hpp>
+
 #include <boost/filesystem.hpp>
 #include <stdint.h>
 
+
 namespace dcp {
+
 
 class Data
 {
 public:
-	Data ();
-	explicit Data (int size);
-	Data (uint8_t const * data, int size);
-	Data (boost::shared_array<uint8_t> data, int size);
-	explicit Data (boost::filesystem::path file);
-
 	virtual ~Data () {}
 
 	void write (boost::filesystem::path file) const;
 	void write_via_temp (boost::filesystem::path temp, boost::filesystem::path final) const;
 
-	boost::shared_array<uint8_t> data () const {
-		return _data;
-	}
-
-	int size () const {
-		return _size;
-	}
-
-	void set_size (int s) {
-		_size = s;
-	}
-
-private:
-	boost::shared_array<uint8_t> _data;
-	/** amount of `valid' data in _data; the array may be larger */
-	int _size;
+	virtual uint8_t const * data () const = 0;
+	virtual uint8_t * data () = 0;
+	virtual int size () const = 0;
 };
 
+
 bool operator==(Data const & a, Data const & b);
+bool operator!=(Data const & a, Data const & b);
+
 
 }
+
 
 #endif

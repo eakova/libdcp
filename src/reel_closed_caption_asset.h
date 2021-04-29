@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2017 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,39 +31,49 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/reel_closed_caption_asset.h
- *  @brief ReelClosedCaptionAsset class.
+ *  @brief ReelClosedCaptionAsset class
  */
+
 
 #ifndef LIBDCP_REEL_CLOSED_CAPTION_ASSET_H
 #define LIBDCP_REEL_CLOSED_CAPTION_ASSET_H
 
+
+#include "language_tag.h"
 #include "reel_asset.h"
-#include "reel_mxf.h"
+#include "reel_file_asset.h"
 #include "subtitle_asset.h"
+
+
+struct verify_invalid_language2;
+
 
 namespace dcp {
 
-class SubtitleAsset;
 
 /** @class ReelClosedCaptionAsset
- *  @brief Part of a Reel's description which refers to a closed caption XML/MXF file.
+ *  @brief Part of a Reel's description which refers to a closed caption XML/MXF file
  */
-class ReelClosedCaptionAsset : public ReelAsset, public ReelMXF
+class ReelClosedCaptionAsset : public ReelFileAsset
 {
 public:
-	ReelClosedCaptionAsset (boost::shared_ptr<SubtitleAsset> asset, Fraction edit_rate, int64_t instrinsic_duration, int64_t entry_point);
-	explicit ReelClosedCaptionAsset (boost::shared_ptr<const cxml::Node>);
+	ReelClosedCaptionAsset (std::shared_ptr<SubtitleAsset> asset, Fraction edit_rate, int64_t instrinsic_duration, int64_t entry_point);
+	explicit ReelClosedCaptionAsset (std::shared_ptr<const cxml::Node>);
 
-	xmlpp::Node* write_to_cpl (xmlpp::Node* node, Standard standard) const;
-	bool equals (boost::shared_ptr<const ReelClosedCaptionAsset>, EqualityOptions, NoteHandler) const;
-
-	boost::shared_ptr<SubtitleAsset> asset () const {
-		return asset_of_type<SubtitleAsset> ();
+	std::shared_ptr<const SubtitleAsset> asset () const {
+		return asset_of_type<const SubtitleAsset>();
 	}
 
-	void set_language (std::string l) {
-		_language = l;
+	std::shared_ptr<SubtitleAsset> asset () {
+		return asset_of_type<SubtitleAsset>();
+	}
+
+	bool equals (std::shared_ptr<const ReelClosedCaptionAsset>, EqualityOptions, NoteHandler) const;
+
+	void set_language (dcp::LanguageTag l) {
+		_language = l.to_string();
 	}
 
 	void unset_language () {
@@ -74,14 +84,14 @@ public:
 		return _language;
 	}
 
-private:
-	std::string key_type () const;
-	std::string cpl_node_name (Standard standard) const;
-	std::pair<std::string, std::string> cpl_node_namespace (Standard standard) const;
+protected:
+	friend struct ::verify_invalid_language2;
 
 	boost::optional<std::string> _language;
 };
 
+
 }
+
 
 #endif

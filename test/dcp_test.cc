@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2013-2019 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2013-2020 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -37,112 +37,49 @@
 #include "mono_picture_asset.h"
 #include "stereo_picture_asset.h"
 #include "picture_asset_writer.h"
+#include "reel_picture_asset.h"
 #include "sound_asset_writer.h"
 #include "sound_asset.h"
 #include "atmos_asset.h"
 #include "reel.h"
 #include "test.h"
-#include "file.h"
 #include "reel_mono_picture_asset.h"
 #include "reel_stereo_picture_asset.h"
 #include "reel_sound_asset.h"
 #include "reel_atmos_asset.h"
+#include "reel_markers_asset.h"
 #include <asdcp/KM_util.h>
 #include <sndfile.h>
 #include <boost/test/unit_test.hpp>
 
 using std::string;
-using boost::shared_ptr;
+using std::vector;
+using std::dynamic_pointer_cast;
+using std::shared_ptr;
+using std::make_shared;
+#if BOOST_VERSION >= 106100
+using namespace boost::placeholders;
+#endif
 
-static shared_ptr<dcp::DCP>
-make_simple (boost::filesystem::path path)
-{
-	Kumu::cth_test = true;
-
-	/* Some known metadata */
-	dcp::XMLMetadata xml_meta;
-	xml_meta.annotation_text = "A Test DCP";
-	xml_meta.issuer = "OpenDCP 0.0.25";
-	xml_meta.creator = "OpenDCP 0.0.25";
-	xml_meta.issue_date = "2012-07-17T04:45:18+00:00";
-	dcp::MXFMetadata mxf_meta;
-	mxf_meta.company_name = "OpenDCP";
-	mxf_meta.product_name = "OpenDCP";
-	mxf_meta.product_version = "0.0.25";
-
-	/* We're making build/test/DCP/dcp_test1 */
-	boost::filesystem::remove_all (path);
-	boost::filesystem::create_directories (path);
-	shared_ptr<dcp::DCP> d (new dcp::DCP (path));
-	shared_ptr<dcp::CPL> cpl (new dcp::CPL ("A Test DCP", dcp::FEATURE));
-	cpl->set_content_version_id ("urn:uri:81fb54df-e1bf-4647-8788-ea7ba154375b_2012-07-17T04:45:18+00:00");
-	cpl->set_content_version_label_text ("81fb54df-e1bf-4647-8788-ea7ba154375b_2012-07-17T04:45:18+00:00");
-	cpl->set_metadata (xml_meta);
-
-	shared_ptr<dcp::MonoPictureAsset> mp (new dcp::MonoPictureAsset (dcp::Fraction (24, 1), dcp::SMPTE));
-	mp->set_metadata (mxf_meta);
-	shared_ptr<dcp::PictureAssetWriter> picture_writer = mp->start_write (path / "video.mxf", false);
-	dcp::File j2c ("test/data/32x32_red_square.j2c");
-	for (int i = 0; i < 24; ++i) {
-		picture_writer->write (j2c.data (), j2c.size ());
-	}
-	picture_writer->finalize ();
-
-	shared_ptr<dcp::SoundAsset> ms (new dcp::SoundAsset (dcp::Fraction (24, 1), 48000, 1, dcp::SMPTE));
-	ms->set_metadata (mxf_meta);
-	shared_ptr<dcp::SoundAssetWriter> sound_writer = ms->start_write (path / "audio.mxf");
-
-	SF_INFO info;
-	info.format = 0;
-	SNDFILE* sndfile = sf_open ("test/data/1s_24-bit_48k_silence.wav", SFM_READ, &info);
-	BOOST_CHECK (sndfile);
-	float buffer[4096*6];
-	float* channels[1];
-	channels[0] = buffer;
-	while (1) {
-		sf_count_t N = sf_readf_float (sndfile, buffer, 4096);
-		sound_writer->write (channels, N);
-		if (N < 4096) {
-			break;
-		}
-	}
-
-	sound_writer->finalize ();
-
-	cpl->add (shared_ptr<dcp::Reel> (
-			  new dcp::Reel (
-				  shared_ptr<dcp::ReelMonoPictureAsset> (new dcp::ReelMonoPictureAsset (mp, 0)),
-				  shared_ptr<dcp::ReelSoundAsset> (new dcp::ReelSoundAsset (ms, 0))
-				  )
-			  ));
-
-	d->add (cpl);
-	return d;
-}
 
 /** Test creation of a 2D SMPTE DCP from very simple inputs */
 BOOST_AUTO_TEST_CASE (dcp_test1)
 {
-	dcp::XMLMetadata xml_meta;
-	xml_meta.annotation_text = "Created by libdcp";
-	xml_meta.issuer = "OpenDCP 0.0.25";
-	xml_meta.creator = "OpenDCP 0.0.25";
-	xml_meta.issue_date = "2012-07-17T04:45:18+00:00";
-	make_simple("build/test/DCP/dcp_test1")->write_xml (dcp::SMPTE, xml_meta);
+	RNGFixer fixer;
+
+	make_simple("build/test/DCP/dcp_test1")->write_xml(
+		"OpenDCP 0.0.25", "OpenDCP 0.0.25", "2012-07-17T04:45:18+00:00", "A Test DCP"
+		);
+
 	/* build/test/DCP/dcp_test1 is checked against test/ref/DCP/dcp_test1 by run/tests */
 }
 
 /** Test creation of a 3D DCP from very simple inputs */
 BOOST_AUTO_TEST_CASE (dcp_test2)
 {
-	Kumu::cth_test = true;
+	RNGFixer fix;
 
 	/* Some known metadata */
-	dcp::XMLMetadata xml_meta;
-	xml_meta.annotation_text = "A Test DCP";
-	xml_meta.issuer = "OpenDCP 0.0.25";
-	xml_meta.creator = "OpenDCP 0.0.25";
-	xml_meta.issue_date = "2012-07-17T04:45:18+00:00";
 	dcp::MXFMetadata mxf_meta;
 	mxf_meta.company_name = "OpenDCP";
 	mxf_meta.product_name = "OpenDCP";
@@ -152,15 +89,19 @@ BOOST_AUTO_TEST_CASE (dcp_test2)
 	boost::filesystem::remove_all ("build/test/DCP/dcp_test2");
 	boost::filesystem::create_directories ("build/test/DCP/dcp_test2");
 	dcp::DCP d ("build/test/DCP/dcp_test2");
-	shared_ptr<dcp::CPL> cpl (new dcp::CPL ("A Test DCP", dcp::FEATURE));
-	cpl->set_content_version_id ("urn:uri:81fb54df-e1bf-4647-8788-ea7ba154375b_2012-07-17T04:45:18+00:00");
-	cpl->set_content_version_label_text ("81fb54df-e1bf-4647-8788-ea7ba154375b_2012-07-17T04:45:18+00:00");
-	cpl->set_metadata (xml_meta);
+	auto cpl = make_shared<dcp::CPL>("A Test DCP", dcp::ContentKind::FEATURE, dcp::Standard::SMPTE);
+	cpl->set_content_version (
+		dcp::ContentVersion("urn:uri:81fb54df-e1bf-4647-8788-ea7ba154375b_2012-07-17T04:45:18+00:00", "81fb54df-e1bf-4647-8788-ea7ba154375b_2012-07-17T04:45:18+00:00")
+		);
+	cpl->set_issuer ("OpenDCP 0.0.25");
+	cpl->set_creator ("OpenDCP 0.0.25");
+	cpl->set_issue_date ("2012-07-17T04:45:18+00:00");
+	cpl->set_annotation_text ("A Test DCP");
 
-	shared_ptr<dcp::StereoPictureAsset> mp (new dcp::StereoPictureAsset (dcp::Fraction (24, 1), dcp::SMPTE));
+	auto mp = make_shared<dcp::StereoPictureAsset>(dcp::Fraction (24, 1), dcp::Standard::SMPTE);
 	mp->set_metadata (mxf_meta);
-	shared_ptr<dcp::PictureAssetWriter> picture_writer = mp->start_write ("build/test/DCP/dcp_test2/video.mxf", false);
-	dcp::File j2c ("test/data/32x32_red_square.j2c");
+	auto picture_writer = mp->start_write ("build/test/DCP/dcp_test2/video.mxf", false);
+	dcp::ArrayData j2c ("test/data/flat_red.j2c");
 	for (int i = 0; i < 24; ++i) {
 		/* Left */
 		picture_writer->write (j2c.data (), j2c.size ());
@@ -169,19 +110,19 @@ BOOST_AUTO_TEST_CASE (dcp_test2)
 	}
 	picture_writer->finalize ();
 
-	shared_ptr<dcp::SoundAsset> ms (new dcp::SoundAsset (dcp::Fraction (24, 1), 48000, 1, dcp::SMPTE));
+	auto ms = make_shared<dcp::SoundAsset>(dcp::Fraction(24, 1), 48000, 1, dcp::LanguageTag("en-GB"), dcp::Standard::SMPTE);
 	ms->set_metadata (mxf_meta);
-	shared_ptr<dcp::SoundAssetWriter> sound_writer = ms->start_write ("build/test/DCP/dcp_test2/audio.mxf");
+	auto sound_writer = ms->start_write ("build/test/DCP/dcp_test2/audio.mxf");
 
 	SF_INFO info;
 	info.format = 0;
-	SNDFILE* sndfile = sf_open ("test/data/1s_24-bit_48k_silence.wav", SFM_READ, &info);
+	auto sndfile = sf_open ("test/data/1s_24-bit_48k_silence.wav", SFM_READ, &info);
 	BOOST_CHECK (sndfile);
 	float buffer[4096*6];
 	float* channels[1];
 	channels[0] = buffer;
-	while (1) {
-		sf_count_t N = sf_readf_float (sndfile, buffer, 4096);
+	while (true) {
+		auto N = sf_readf_float (sndfile, buffer, 4096);
 		sound_writer->write (channels, N);
 		if (N < 4096) {
 			break;
@@ -190,17 +131,14 @@ BOOST_AUTO_TEST_CASE (dcp_test2)
 
 	sound_writer->finalize ();
 
-	cpl->add (shared_ptr<dcp::Reel> (
-			  new dcp::Reel (
-				  shared_ptr<dcp::ReelStereoPictureAsset> (new dcp::ReelStereoPictureAsset (mp, 0)),
-				  shared_ptr<dcp::ReelSoundAsset> (new dcp::ReelSoundAsset (ms, 0))
-				  )
+	cpl->add (make_shared<dcp::Reel>(
+			  make_shared<dcp::ReelStereoPictureAsset>(mp, 0),
+			  make_shared<dcp::ReelSoundAsset>(ms, 0)
 			  ));
 
 	d.add (cpl);
 
-	xml_meta.annotation_text = "Created by libdcp";
-	d.write_xml (dcp::SMPTE, xml_meta);
+	d.write_xml ("OpenDCP 0.0.25", "OpenDCP 0.0.25", "2012-07-17T04:45:18+00:00", "Created by libdcp");
 
 	/* build/test/DCP/dcp_test2 is checked against test/ref/DCP/dcp_test2 by run/tests */
 }
@@ -233,17 +171,96 @@ BOOST_AUTO_TEST_CASE (dcp_test4)
 	BOOST_CHECK (!A.equals (B, dcp::EqualityOptions(), boost::bind (&note, _1, _2)));
 }
 
+static
+void
+test_rewriting_sound(string name, bool modify)
+{
+	using namespace boost::filesystem;
+
+	dcp::DCP A ("test/ref/DCP/dcp_test1");
+	A.read ();
+
+	BOOST_REQUIRE (!A.cpls().empty());
+	BOOST_REQUIRE (!A.cpls().front()->reels().empty());
+	auto A_picture = dynamic_pointer_cast<dcp::ReelMonoPictureAsset>(A.cpls().front()->reels().front()->main_picture());
+	BOOST_REQUIRE (A_picture);
+	auto A_sound = dynamic_pointer_cast<dcp::ReelSoundAsset>(A.cpls().front()->reels().front()->main_sound());
+
+	string const picture = "j2c_5279f9aa-94d7-42a6-b0e0-e4eaec4e2a15.mxf";
+
+	remove_all ("build/test/" + name);
+	dcp::DCP B ("build/test/" + name);
+	auto reel = make_shared<dcp::Reel>();
+
+	BOOST_REQUIRE (A_picture->mono_asset());
+	BOOST_REQUIRE (A_picture->mono_asset()->file());
+	copy_file (A_picture->mono_asset()->file().get(), path("build") / "test" / name / picture);
+	reel->add(make_shared<dcp::ReelMonoPictureAsset>(make_shared<dcp::MonoPictureAsset>(path("build") / "test" / name / picture), 0));
+
+	auto reader = A_sound->asset()->start_read();
+	auto sound = make_shared<dcp::SoundAsset>(A_sound->asset()->edit_rate(), A_sound->asset()->sampling_rate(), A_sound->asset()->channels(), dcp::LanguageTag("en-US"), dcp::Standard::SMPTE);
+	auto writer = sound->start_write(path("build") / "test" / name / "pcm_8246f87f-e1df-4c42-a290-f3b3069ff021.mxf", {});
+
+	bool need_to_modify = modify;
+	for (int i = 0; i < A_sound->asset()->intrinsic_duration(); ++i) {
+		auto sf = reader->get_frame (i);
+		float* out[sf->channels()];
+		for (int j = 0; j < sf->channels(); ++j) {
+			out[j] = new float[sf->samples()];
+		}
+		for (int j = 0; j < sf->samples(); ++j) {
+			for (int k = 0; k < sf->channels(); ++k) {
+				out[k][j] = static_cast<float>(sf->get(k, j)) / (1 << 23);
+				if (need_to_modify) {
+					out[k][j] += 1.0 / (1 << 23);
+					need_to_modify = false;
+				}
+			}
+		}
+		writer->write (out, sf->samples());
+		for (int j = 0; j < sf->channels(); ++j) {
+			delete[] out[j];
+		}
+	}
+	writer->finalize();
+
+	reel->add(make_shared<dcp::ReelSoundAsset>(sound, 0));
+	reel->add(simple_markers());
+
+	auto cpl = make_shared<dcp::CPL>("A Test DCP", dcp::ContentKind::TRAILER, dcp::Standard::SMPTE);
+	cpl->add (reel);
+
+	B.add (cpl);
+	B.write_xml ();
+
+	dcp::EqualityOptions eq;
+	eq.reel_hashes_can_differ = true;
+	eq.max_audio_sample_error = 0;
+	if (modify) {
+		BOOST_CHECK (!A.equals(B, eq, boost::bind(&note, _1, _2)));
+	} else {
+		BOOST_CHECK (A.equals(B, eq, boost::bind(&note, _1, _2)));
+	}
+}
+
+/** Test comparison of a DCP with another that has the same picture and the same (but re-written) sound */
+BOOST_AUTO_TEST_CASE (dcp_test9)
+{
+	test_rewriting_sound ("dcp_test9", false);
+}
+
+/** Test comparison of a DCP with another that has the same picture and very slightly modified sound */
+BOOST_AUTO_TEST_CASE (dcp_test10)
+{
+	test_rewriting_sound ("dcp_test10", true);
+}
+
 /** Test creation of a 2D DCP with an Atmos track */
 BOOST_AUTO_TEST_CASE (dcp_test5)
 {
-	Kumu::cth_test = true;
+	RNGFixer fix;
 
 	/* Some known metadata */
-	dcp::XMLMetadata xml_meta;
-	xml_meta.annotation_text = "A Test DCP";
-	xml_meta.issuer = "OpenDCP 0.0.25";
-	xml_meta.creator = "OpenDCP 0.0.25";
-	xml_meta.issue_date = "2012-07-17T04:45:18+00:00";
 	dcp::MXFMetadata mxf_meta;
 	mxf_meta.company_name = "OpenDCP";
 	mxf_meta.product_name = "OpenDCP";
@@ -253,23 +270,27 @@ BOOST_AUTO_TEST_CASE (dcp_test5)
 	boost::filesystem::remove_all ("build/test/DCP/dcp_test5");
 	boost::filesystem::create_directories ("build/test/DCP/dcp_test5");
 	dcp::DCP d ("build/test/DCP/dcp_test5");
-	shared_ptr<dcp::CPL> cpl (new dcp::CPL ("A Test DCP", dcp::FEATURE));
-	cpl->set_content_version_id ("urn:uri:81fb54df-e1bf-4647-8788-ea7ba154375b_2012-07-17T04:45:18+00:00");
-	cpl->set_content_version_label_text ("81fb54df-e1bf-4647-8788-ea7ba154375b_2012-07-17T04:45:18+00:00");
-	cpl->set_metadata (xml_meta);
+	auto cpl = make_shared<dcp::CPL>("A Test DCP", dcp::ContentKind::FEATURE, dcp::Standard::SMPTE);
+	cpl->set_content_version (
+		dcp::ContentVersion("urn:uri:81fb54df-e1bf-4647-8788-ea7ba154375b_2012-07-17T04:45:18+00:00", "81fb54df-e1bf-4647-8788-ea7ba154375b_2012-07-17T04:45:18+00:00")
+		);
+	cpl->set_issuer ("OpenDCP 0.0.25");
+	cpl->set_creator ("OpenDCP 0.0.25");
+	cpl->set_issue_date ("2012-07-17T04:45:18+00:00");
+	cpl->set_annotation_text ("A Test DCP");
 
-	shared_ptr<dcp::MonoPictureAsset> mp (new dcp::MonoPictureAsset (dcp::Fraction (24, 1), dcp::SMPTE));
+	auto mp = make_shared<dcp::MonoPictureAsset>(dcp::Fraction (24, 1), dcp::Standard::SMPTE);
 	mp->set_metadata (mxf_meta);
 	shared_ptr<dcp::PictureAssetWriter> picture_writer = mp->start_write ("build/test/DCP/dcp_test5/video.mxf", false);
-	dcp::File j2c ("test/data/32x32_red_square.j2c");
+	dcp::ArrayData j2c ("test/data/flat_red.j2c");
 	for (int i = 0; i < 24; ++i) {
 		picture_writer->write (j2c.data (), j2c.size ());
 	}
 	picture_writer->finalize ();
 
-	shared_ptr<dcp::SoundAsset> ms (new dcp::SoundAsset (dcp::Fraction (24, 1), 48000, 1, dcp::SMPTE));
+	auto ms = make_shared<dcp::SoundAsset>(dcp::Fraction(24, 1), 48000, 1, dcp::LanguageTag("en-GB"), dcp::Standard::SMPTE);
 	ms->set_metadata (mxf_meta);
-	shared_ptr<dcp::SoundAssetWriter> sound_writer = ms->start_write ("build/test/DCP/dcp_test5/audio.mxf");
+	auto sound_writer = ms->start_write ("build/test/DCP/dcp_test5/audio.mxf");
 
 	SF_INFO info;
 	info.format = 0;
@@ -302,8 +323,7 @@ BOOST_AUTO_TEST_CASE (dcp_test5)
 
 	d.add (cpl);
 
-	xml_meta.annotation_text = "Created by libdcp";
-	d.write_xml (dcp::SMPTE, xml_meta);
+	d.write_xml ("OpenDCP 0.0.25", "OpenDCP 0.0.25", "2012-07-17T04:45:18+00:00", "Created by libdcp");
 
 	/* build/test/DCP/dcp_test5 is checked against test/ref/DCP/dcp_test5 by run/tests */
 }
@@ -325,20 +345,83 @@ BOOST_AUTO_TEST_CASE (dcp_test6)
 /** Test creation of a 2D Interop DCP from very simple inputs */
 BOOST_AUTO_TEST_CASE (dcp_test7)
 {
-	dcp::XMLMetadata xml_meta;
-	xml_meta.annotation_text = "Created by libdcp";
-	xml_meta.issuer = "OpenDCP 0.0.25";
-	xml_meta.creator = "OpenDCP 0.0.25";
-	xml_meta.issue_date = "2012-07-17T04:45:18+00:00";
-	make_simple("build/test/DCP/dcp_test7")->write_xml (dcp::INTEROP, xml_meta);
+	RNGFixer fix;
+
+	make_simple("build/test/DCP/dcp_test7", 1, 24, dcp::Standard::INTEROP)->write_xml(
+		"OpenDCP 0.0.25", "OpenDCP 0.0.25", "2012-07-17T04:45:18+00:00", "Created by libdcp"
+		);
+
 	/* build/test/DCP/dcp_test7 is checked against test/ref/DCP/dcp_test7 by run/tests */
 }
 
-/** Test reading of a DCP with multiple PKLs */
+/** Test reading of a DCP with multiple CPLs */
 BOOST_AUTO_TEST_CASE (dcp_test8)
 {
 	dcp::DCP dcp (private_test / "data/SMPTE_TST-B1PB2P_S_EN-EN-CCAP_5171-HI-VI_2K_ISDCF_20151123_DPPT_SMPTE_combo/");
 	dcp.read ();
 
 	BOOST_REQUIRE_EQUAL (dcp.cpls().size(), 2);
+}
+
+
+/** Test reading a DCP whose ASSETMAP contains assets not used by any PKL */
+BOOST_AUTO_TEST_CASE (dcp_things_in_assetmap_not_in_pkl)
+{
+	dcp::DCP dcp ("test/data/extra_assetmap");
+	BOOST_CHECK_NO_THROW (dcp.read());
+}
+
+
+/** Test that writing the XML for a DCP with no CPLs throws */
+BOOST_AUTO_TEST_CASE (dcp_with_no_cpls)
+{
+	dcp::DCP dcp ("build/test/dcp_with_no_cpls");
+	BOOST_REQUIRE_THROW (dcp.write_xml(), dcp::MiscError);
+}
+
+
+/** Test that writing the XML for a DCP with Interop CPLs makes a SMPTE assetmap */
+BOOST_AUTO_TEST_CASE (dcp_with_interop_cpls)
+{
+	boost::filesystem::path path = "build/test/dcp_with_interop_cpls";
+	boost::filesystem::remove_all (path);
+	dcp::DCP dcp (path);
+	auto cpl1 = make_shared<dcp::CPL>("", dcp::ContentKind::FEATURE, dcp::Standard::INTEROP);
+	cpl1->add(make_shared<dcp::Reel>());
+	dcp.add(cpl1);
+	auto cpl2 = make_shared<dcp::CPL>("", dcp::ContentKind::FEATURE, dcp::Standard::INTEROP);
+	cpl2->add(make_shared<dcp::Reel>());
+	dcp.add(cpl2);
+	dcp.write_xml ();
+	BOOST_REQUIRE (boost::filesystem::exists(path / "ASSETMAP"));
+	BOOST_REQUIRE (!boost::filesystem::exists(path / "ASSETMAP.xml"));
+}
+
+
+/** Test that writing the XML for a DCP with SMPTE CPLs makes a SMPTE assetmap */
+BOOST_AUTO_TEST_CASE (dcp_with_smpte_cpls)
+{
+	boost::filesystem::path path = "build/test/dcp_with_smpte_cpls";
+	boost::filesystem::remove_all (path);
+	dcp::DCP dcp (path);
+	auto cpl1 = make_shared<dcp::CPL>("", dcp::ContentKind::FEATURE, dcp::Standard::SMPTE);
+	cpl1->add(make_shared<dcp::Reel>());
+	dcp.add(cpl1);
+	auto cpl2 = make_shared<dcp::CPL>("", dcp::ContentKind::FEATURE, dcp::Standard::SMPTE);
+	cpl2->add(make_shared<dcp::Reel>());
+	dcp.add(cpl2);
+	dcp.write_xml ();
+	BOOST_REQUIRE (!boost::filesystem::exists(path / "ASSETMAP"));
+	BOOST_REQUIRE (boost::filesystem::exists(path / "ASSETMAP.xml"));
+}
+
+
+/** Test that writing the XML for a DCP with mixed-standard CPLs throws */
+BOOST_AUTO_TEST_CASE (dcp_with_mixed_cpls)
+{
+	dcp::DCP dcp ("build/test/dcp_with_mixed_cpls");
+	dcp.add(make_shared<dcp::CPL>("", dcp::ContentKind::FEATURE, dcp::Standard::SMPTE));
+	dcp.add(make_shared<dcp::CPL>("", dcp::ContentKind::FEATURE, dcp::Standard::INTEROP));
+	dcp.add(make_shared<dcp::CPL>("", dcp::ContentKind::FEATURE, dcp::Standard::SMPTE));
+	BOOST_REQUIRE_THROW (dcp.write_xml(), dcp::MiscError);
 }

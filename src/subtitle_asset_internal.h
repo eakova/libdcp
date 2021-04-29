@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2016 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,15 +31,25 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/subtitle_asset_internal.h
+ *  @brief Internal SubtitleAsset helpers
+ */
+
+
 #ifndef LIBDCP_SUBTITLE_ASSET_INTERNAL_H
 #define LIBDCP_SUBTITLE_ASSET_INTERNAL_H
 
+
+#include "array_data.h"
+#include "dcp_time.h"
 #include "raw_convert.h"
 #include "types.h"
-#include "dcp_time.h"
-#include "data.h"
+#include "warnings.h"
+LIBDCP_DISABLE_WARNINGS
 #include <libxml++/libxml++.h>
-#include <boost/foreach.hpp>
+LIBDCP_ENABLE_WARNINGS
+
 
 struct take_intersection_test;
 struct take_difference_test;
@@ -47,11 +57,15 @@ struct pull_fonts_test1;
 struct pull_fonts_test2;
 struct pull_fonts_test3;
 
+
 namespace dcp {
+
 
 class SubtitleString;
 
+
 namespace order {
+
 
 struct Context
 {
@@ -62,12 +76,13 @@ struct Context
 	int spot_number;
 };
 
+
 class Font
 {
 public:
 	Font () {}
 
-	Font (boost::shared_ptr<SubtitleString> s, Standard standard);
+	Font (std::shared_ptr<SubtitleString> s, Standard standard);
 
 	xmlpp::Element* as_xml (xmlpp::Element* parent, Context& context) const;
 
@@ -87,14 +102,15 @@ private:
 	std::map<std::string, std::string> _values;
 };
 
+
 class Part
 {
 public:
-	Part (boost::shared_ptr<Part> parent_)
+	Part (std::shared_ptr<Part> parent_)
 		: parent (parent_)
 	{}
 
-	Part (boost::shared_ptr<Part> parent_, Font font_)
+	Part (std::shared_ptr<Part> parent_, Font font_)
 		: parent (parent_)
 		, font (font_)
 	{}
@@ -104,28 +120,30 @@ public:
 	virtual xmlpp::Element* as_xml (xmlpp::Element* parent, Context &) const;
 	void write_xml (xmlpp::Element* parent, order::Context& context) const;
 
-	boost::shared_ptr<Part> parent;
+	std::shared_ptr<Part> parent;
 	Font font;
-	std::list<boost::shared_ptr<Part> > children;
+	std::vector<std::shared_ptr<Part>> children;
 };
+
 
 class String : public Part
 {
 public:
-	String (boost::shared_ptr<Part> parent, Font font, std::string text_)
+	String (std::shared_ptr<Part> parent, Font font, std::string text_)
 		: Part (parent, font)
 		, text (text_)
 	{}
 
-	virtual xmlpp::Element* as_xml (xmlpp::Element* parent, Context &) const;
+	virtual xmlpp::Element* as_xml (xmlpp::Element* parent, Context &) const override;
 
 	std::string text;
 };
 
+
 class Text : public Part
 {
 public:
-	Text (boost::shared_ptr<Part> parent, HAlign h_align, float h_position, VAlign v_align, float v_position, Direction direction)
+	Text (std::shared_ptr<Part> parent, HAlign h_align, float h_position, VAlign v_align, float v_position, Direction direction)
 		: Part (parent)
 		, _h_align (h_align)
 		, _h_position (h_position)
@@ -134,7 +152,7 @@ public:
 		, _direction (direction)
 	{}
 
-	xmlpp::Element* as_xml (xmlpp::Element* parent, Context& context) const;
+	xmlpp::Element* as_xml (xmlpp::Element* parent, Context& context) const override;
 
 private:
 	HAlign _h_align;
@@ -144,10 +162,11 @@ private:
 	Direction _direction;
 };
 
+
 class Subtitle : public Part
 {
 public:
-	Subtitle (boost::shared_ptr<Part> parent, Time in, Time out, Time fade_up, Time fade_down)
+	Subtitle (std::shared_ptr<Part> parent, Time in, Time out, Time fade_up, Time fade_down)
 		: Part (parent)
 		, _in (in)
 		, _out (out)
@@ -155,7 +174,7 @@ public:
 		, _fade_down (fade_down)
 	{}
 
-	xmlpp::Element* as_xml (xmlpp::Element* parent, Context& context) const;
+	xmlpp::Element* as_xml (xmlpp::Element* parent, Context& context) const override;
 
 private:
 	Time _in;
@@ -164,10 +183,11 @@ private:
 	Time _fade_down;
 };
 
+
 class Image : public Part
 {
 public:
-	Image (boost::shared_ptr<Part> parent, std::string id, Data png_data, HAlign h_align, float h_position, VAlign v_align, float v_position)
+	Image (std::shared_ptr<Part> parent, std::string id, ArrayData png_data, HAlign h_align, float h_position, VAlign v_align, float v_position)
 		: Part (parent)
 		, _png_data (png_data)
 		, _id (id)
@@ -177,10 +197,10 @@ public:
 		, _v_position (v_position)
 	{}
 
-	xmlpp::Element* as_xml (xmlpp::Element* parent, Context& context) const;
+	xmlpp::Element* as_xml (xmlpp::Element* parent, Context& context) const override;
 
 private:
-	Data _png_data;
+	ArrayData _png_data;
 	std::string _id; ///< the ID of this image
 	HAlign _h_align;
 	float _h_position;
@@ -188,8 +208,9 @@ private:
 	float _v_position;
 };
 
-}
 
 }
+}
+
 
 #endif

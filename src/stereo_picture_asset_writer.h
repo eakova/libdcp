@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2016 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,15 +31,21 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/stereo_picture_asset_writer.h
+ *  @brief StereoPictureAssetWriter class
+ */
+
+
 #include "picture_asset_writer.h"
 #include "types.h"
-#include <boost/shared_ptr.hpp>
-#include <boost/utility.hpp>
+#include <memory>
 #include <stdint.h>
 #include <string>
-#include <fstream>
+
 
 namespace dcp {
+
 
 /** @class StereoPictureAssetWriter
  *  @brief A helper class for writing to StereoPictureAssets.
@@ -58,9 +64,9 @@ public:
 	 *  @param data JPEG2000 data.
 	 *  @param size Size of data.
 	 */
-	FrameInfo write (uint8_t const * data, int size);
-	void fake_write (int size);
-	bool finalize ();
+	FrameInfo write (uint8_t const * data, int size) override;
+	void fake_write (int size) override;
+	bool finalize () override;
 
 private:
 	friend class StereoPictureAsset;
@@ -73,9 +79,10 @@ private:
 	*/
 
 	struct ASDCPState;
-	boost::shared_ptr<ASDCPState> _state;
+	std::shared_ptr<ASDCPState> _state;
 
-	dcp::Eye _next_eye;
+	dcp::Eye _next_eye = Eye::LEFT;
 };
+
 
 }

@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2016 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2016-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,28 +31,41 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/atmos_asset.h
+ *  @brief AtmosAsset class
+ */
+
+
 #ifndef LIBDCP_ATMOS_ASSET_H
 #define LIBDCP_ATMOS_ASSET_H
+
 
 #include "asset.h"
 #include "mxf.h"
 #include "atmos_asset_reader.h"
 
+
 namespace dcp {
+
 
 class AtmosAssetWriter;
 
+
+/** @class AtmosAsset
+ *  @brief An asset of Dolby ATMOS sound data
+ */
 class AtmosAsset : public Asset, public MXF
 {
 public:
-	AtmosAsset (Fraction edit_rate, int first_frame, int max_channel_count, int max_object_count, std::string atmos_id, int atmos_version);
+	AtmosAsset (Fraction edit_rate, int first_frame, int max_channel_count, int max_object_count, int atmos_version);
 	explicit AtmosAsset (boost::filesystem::path file);
 
-	boost::shared_ptr<AtmosAssetWriter> start_write (boost::filesystem::path file);
-	boost::shared_ptr<AtmosAssetReader> start_read () const;
+	std::shared_ptr<AtmosAssetWriter> start_write (boost::filesystem::path file);
+	std::shared_ptr<AtmosAssetReader> start_read () const;
 
 	static std::string static_pkl_type (Standard);
-	std::string pkl_type (Standard s) const {
+	std::string pkl_type (Standard s) const override {
 		return static_pkl_type (s);
 	}
 
@@ -91,14 +104,16 @@ private:
 	friend class AtmosAssetWriter;
 
 	Fraction _edit_rate;
-	int64_t _intrinsic_duration;
-	int _first_frame;
-	int _max_channel_count;
-	int _max_object_count;
+	int64_t _intrinsic_duration = 0;
+	int _first_frame = 0;
+	int _max_channel_count = 0;
+	int _max_object_count = 0;
 	std::string _atmos_id;
-	int _atmos_version;
+	int _atmos_version = 0;
 };
 
+
 }
+
 
 #endif

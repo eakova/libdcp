@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2015 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -36,7 +36,12 @@
 #include "openjpeg_image.h"
 #include "colour_conversion.h"
 #include "rgb_xyz.h"
+/* This DISABLE/ENABLE pair is just to ignore some warnings from Magick++.h; they
+ * can be removed.
+ */
+LIBDCP_DISABLE_WARNINGS
 #include <Magick++.h>
+LIBDCP_ENABLE_WARNINGS
 #include <boost/scoped_array.hpp>
 
 /** @file examples/read_dcp.cc
@@ -51,46 +56,48 @@ main ()
 	/* Read the DCP to find out about it */
 	dcp.read ();
 
-	if (dcp.encrypted ()) {
+	if (dcp.all_encrypted()) {
 		std::cout << "DCP is encrypted.\n";
+	} else if (dcp.any_encrypted()) {
+		std::cout << "DCP is partially encrypted.\n";
 	} else {
 		std::cout << "DCP is not encrypted.\n";
 	}
 
 	std::cout << "DCP has " << dcp.cpls().size() << " CPLs.\n";
-	std::list<boost::shared_ptr<dcp::Asset> > assets = dcp.assets ();
+	auto assets = dcp.assets ();
 	std::cout << "DCP has " << assets.size() << " assets.\n";
-	for (std::list<boost::shared_ptr<dcp::Asset> >::const_iterator i = assets.begin(); i != assets.end(); ++i) {
-		if (boost::dynamic_pointer_cast<dcp::MonoPictureAsset> (*i)) {
+	for (auto i: assets) {
+		if (std::dynamic_pointer_cast<dcp::MonoPictureAsset>(i)) {
 			std::cout << "2D picture\n";
-		} else if (boost::dynamic_pointer_cast<dcp::StereoPictureAsset> (*i)) {
+		} else if (std::dynamic_pointer_cast<dcp::StereoPictureAsset>(i)) {
 			std::cout << "3D picture\n";
-		} else if (boost::dynamic_pointer_cast<dcp::SoundAsset> (*i)) {
+		} else if (std::dynamic_pointer_cast<dcp::SoundAsset>(i)) {
 			std::cout << "Sound\n";
-		} else if (boost::dynamic_pointer_cast<dcp::SubtitleAsset> (*i)) {
+		} else if (std::dynamic_pointer_cast<dcp::SubtitleAsset>(i)) {
 			std::cout << "Subtitle\n";
-		} else if (boost::dynamic_pointer_cast<dcp::CPL> (*i)) {
+		} else if (std::dynamic_pointer_cast<dcp::CPL>(i)) {
 			std::cout << "CPL\n";
 		}
-		std::cout << "\t" << (*i)->file()->leaf().string() << "\n";
+		std::cout << "\t" << i->file()->leaf().string() << "\n";
 	}
 
 	/* Take the first CPL */
-	boost::shared_ptr<dcp::CPL> cpl = dcp.cpls().front ();
+	auto cpl = dcp.cpls().front();
 
 	/* Get the picture asset in the first reel */
-	boost::shared_ptr<dcp::MonoPictureAsset> picture_asset = boost::dynamic_pointer_cast<dcp::MonoPictureAsset> (
-		cpl->reels().front()->main_picture()->asset()
+	auto picture_asset = std::dynamic_pointer_cast<dcp::MonoPictureAsset>(
+		cpl->reels()[0]->main_picture()->asset()
 		);
 
 	/* Get a reader for it */
-	boost::shared_ptr<dcp::MonoPictureAssetReader> picture_asset_reader = picture_asset->start_read();
+	auto picture_asset_reader = picture_asset->start_read();
 
 	/* Get the 1000th frame of it */
-	boost::shared_ptr<const dcp::MonoPictureFrame> picture_frame_j2k = picture_asset_reader->get_frame(999);
+	auto picture_frame_j2k = picture_asset_reader->get_frame(999);
 
 	/* Get the frame as an XYZ image */
-	boost::shared_ptr<const dcp::OpenJPEGImage> picture_image_xyz = picture_frame_j2k->xyz_image ();
+	auto picture_image_xyz = picture_frame_j2k->xyz_image ();
 
 	/* Convert to ARGB */
 	boost::scoped_array<uint8_t> rgba (new uint8_t[picture_image_xyz->size().width * picture_image_xyz->size().height * 4]);

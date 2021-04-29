@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PackingList xmlns="http://www.digicine.com/PROTO-ASDCP-PKL-20040311#">
+  <Id>urn:uuid:93182bd2-b1e8-41a3-b5c8-6e6564273bff</Id>
+  <AnnotationText>Created by libdcp</AnnotationText>
+  <IssueDate>2012-07-17T04:45:18+00:00</IssueDate>
+  <Issuer>OpenDCP 0.0.25</Issuer>
+  <Creator>OpenDCP 0.0.25</Creator>
+  <AssetList>
+    <Asset>
+      <Id>urn:uuid:81fb54df-e1bf-4647-8788-ea7ba154375b</Id>
+      <AnnotationText>81fb54df-e1bf-4647-8788-ea7ba154375b</AnnotationText>
+      <Hash>JgF8rDx3rauByV99k0D6Jm8WXYk=</Hash>
+      <Size>2168</Size>
+      <Type>text/xml;asdcpKind=CPL</Type>
+    </Asset>
+    <Asset>
+      <Id>urn:uuid:1fab8bb0-cfaf-4225-ad6d-01768bc10470</Id>
+      <AnnotationText>1fab8bb0-cfaf-4225-ad6d-01768bc10470</AnnotationText>
+      <Hash>addO7je2lZSNQp55qjCWo5DLKFQ=</Hash>
+      <Size>49240</Size>
+      <Type>application/x-smpte-mxf;asdcpKind=Picture</Type>
+    </Asset>
+    <Asset>
+      <Id>urn:uuid:9482e87d-292d-4e0e-a98d-c61822b60fe9</Id>
+      <AnnotationText>9482e87d-292d-4e0e-a98d-c61822b60fe9</AnnotationText>
+      <Hash>WU0/u1wM17y7Kriq06+65/ViX1o=</Hash>
+      <Size>881326</Size>
+      <Type>application/x-smpte-mxf;asdcpKind=Sound</Type>
+    </Asset>
+  </AssetList>
+</PackingList>

@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2014-2019 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2014-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,16 +31,21 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/exceptions.cc
- *  @brief Exceptions thrown by libdcp.
+ *  @brief Exceptions thrown by libdcp
  */
+
 
 #include "exceptions.h"
 #include "compose.hpp"
 
+
 using std::string;
 using std::runtime_error;
+using boost::optional;
 using namespace dcp;
+
 
 FileError::FileError (string message, boost::filesystem::path filename, int number)
 	: runtime_error (String::compose ("%1 (%2) (error %3)", message, filename.string(), number))
@@ -50,11 +55,13 @@ FileError::FileError (string message, boost::filesystem::path filename, int numb
 
 }
 
+
 UnresolvedRefError::UnresolvedRefError (string id)
 	: runtime_error (String::compose ("Unresolved reference to asset id %1", id))
 {
 
 }
+
 
 TimeFormatError::TimeFormatError (string bad_time)
 	: runtime_error (String::compose ("Bad time string %1", bad_time))
@@ -62,22 +69,13 @@ TimeFormatError::TimeFormatError (string bad_time)
 
 }
 
-MissingAssetError::MissingAssetError (boost::filesystem::path path, AssetType type)
-	: DCPReadError (
-		type == MAIN_PICTURE    ? String::compose ("Missing asset %1 for main picture", path.filename().string()) :
-		(type == MAIN_SOUND     ? String::compose ("Missing asset %1 for main sound", path.filename().string()) :
-		 (type == MAIN_SUBTITLE ? String::compose ("Missing asset %1 for main subtitle", path.filename().string()) :
-		  String::compose ("Missing asset %1", path.filename().string()))))
-	, _path (path)
-{
-
-}
 
 BadContentKindError::BadContentKindError (string content_kind)
-	: DCPReadError (String::compose("Bad content kind '%1'", content_kind))
+	: ReadError (String::compose("Bad content kind '%1'", content_kind))
 {
 
 }
+
 
 NotEncryptedError::NotEncryptedError (string const & what)
 	: runtime_error (String::compose ("%1 is not encrypted", what))
@@ -92,11 +90,6 @@ ProgrammingError::ProgrammingError (string file, int line)
 
 }
 
-MismatchedStandardError::MismatchedStandardError ()
-	: DCPReadError ("DCP contains both Interop and SMPTE parts")
-{
-
-}
 
 KDMDecryptionError::KDMDecryptionError (std::string message, int cipher_length, int modulus_dmax)
 	: runtime_error (String::compose ("Could not decrypt KDM (%1) (%2/%3)", message, cipher_length, modulus_dmax))
@@ -104,11 +97,13 @@ KDMDecryptionError::KDMDecryptionError (std::string message, int cipher_length, 
 
 }
 
+
 KDMFormatError::KDMFormatError (std::string message)
 	: runtime_error (String::compose ("Could not parse KDM (%1)", message))
 {
 
 }
+
 
 CertificateChainError::CertificateChainError (string message)
 	: runtime_error (message)
@@ -116,7 +111,8 @@ CertificateChainError::CertificateChainError (string message)
 
 }
 
-DCPReadError::DCPReadError (string message, string detail)
+
+ReadError::ReadError (string message, string detail)
 	: runtime_error(String::compose("%1 (%2)", message, detail))
 	, _message(message)
 	, _detail(detail)
@@ -124,17 +120,81 @@ DCPReadError::DCPReadError (string message, string detail)
 
 }
 
+
 MissingSubtitleImageError::MissingSubtitleImageError (string id)
 	: runtime_error (String::compose("Could not load image for subtitle %1", id))
 {
 
 }
 
-/** The <Path> in the ASSETMAP is empty for asset.  I can't see how this is valid,
-    but it's been seen in the wild with a DCP that claims to come from ClipsterDCI 5.10.0.5.
- */
-EmptyAssetPathError::EmptyAssetPathError (string id)
-	: DCPReadError (String::compose("Asset map path is empty for asset %1", id))
+
+BadKDMDateError::BadKDMDateError (bool starts_too_early)
+	: runtime_error (
+		starts_too_early ?
+		"KDM validity period starts before or close to the start of the signing certificate validity period" :
+		"KDM validity ends after or close to the end of the signing certificate's validity period"
+		)
+	, _starts_too_early (starts_too_early)
 {
 
 }
+
+
+StartCompressionError::StartCompressionError (optional<int> code)
+	: runtime_error (String::compose("Could not start JPEG2000 encoding%1", code ? String::compose(" (%1", *code) : ""))
+	, _code (code)
+{}
+
+
+
+CombineError::CombineError (string message)
+	: runtime_error (message)
+{}
+
+
+LanguageTagError::LanguageTagError (std::string message)
+	: runtime_error (message)
+{}
+
+
+BadSettingError::BadSettingError (std::string message)
+	: runtime_error (message)
+{
+
+}
+
+
+DuplicateIdError::DuplicateIdError (std::string message)
+	: runtime_error (message)
+{
+
+}
+
+
+MainSoundConfigurationError::MainSoundConfigurationError (std::string s)
+	: runtime_error (String::compose("Could not parse MainSoundConfiguration %1", s))
+{
+
+}
+
+
+UnknownChannelIdError::UnknownChannelIdError (std::string id)
+	: runtime_error (String::compose("Unrecognised channel id '%1'", id))
+{
+
+}
+
+
+NoReelsError::NoReelsError ()
+	: runtime_error ("Cannot make a DCP when no reels have been added")
+{
+
+}
+
+
+MissingAssetmapError::MissingAssetmapError (boost::filesystem::path dir)
+	: ReadError (String::compose("Could not find ASSETMAP nor ASSETMAP.xml in '%1'", dir.string()))
+{
+
+}
+

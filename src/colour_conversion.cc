@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2014-2015 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2014-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,6 +31,12 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/colour_conversion.cc
+ *  @brief ColourConversion class
+ */
+
+
 #include "colour_conversion.h"
 #include "gamma_transfer_function.h"
 #include "modified_gamma_transfer_function.h"
@@ -41,22 +47,25 @@
 #include <boost/numeric/ublas/lu.hpp>
 #include <boost/numeric/ublas/io.hpp>
 
-using boost::shared_ptr;
+
+using std::shared_ptr;
+using std::make_shared;
 using boost::optional;
 using namespace dcp;
+
 
 ColourConversion const &
 ColourConversion::srgb_to_xyz ()
 {
-	static ColourConversion* c = new ColourConversion (
-		shared_ptr<const TransferFunction> (new ModifiedGammaTransferFunction (2.4, 0.04045, 0.055, 12.92)),
-		YUV_TO_RGB_REC601,
+	static auto c = new ColourConversion (
+		make_shared<ModifiedGammaTransferFunction>(2.4, 0.04045, 0.055, 12.92),
+		YUVToRGB::REC601,
 		Chromaticity (0.64, 0.33),
 		Chromaticity (0.3, 0.6),
 		Chromaticity (0.15, 0.06),
 		Chromaticity::D65 (),
 		optional<Chromaticity> (),
-		shared_ptr<const TransferFunction> (new GammaTransferFunction (2.6))
+		make_shared<GammaTransferFunction>(2.6)
 		);
 	return *c;
 }
@@ -64,15 +73,15 @@ ColourConversion::srgb_to_xyz ()
 ColourConversion const &
 ColourConversion::rec601_to_xyz ()
 {
-	static ColourConversion* c = new ColourConversion (
-		shared_ptr<const TransferFunction> (new GammaTransferFunction (2.2)),
-		YUV_TO_RGB_REC601,
+	static auto c = new ColourConversion (
+		make_shared<GammaTransferFunction>(2.2),
+		YUVToRGB::REC601,
 		Chromaticity (0.64, 0.33),
 		Chromaticity (0.3, 0.6),
 		Chromaticity (0.15, 0.06),
 		Chromaticity::D65 (),
 		optional<Chromaticity> (),
-		shared_ptr<const TransferFunction> (new GammaTransferFunction (2.6))
+		make_shared<GammaTransferFunction>(2.6)
 		);
 	return *c;
 }
@@ -80,15 +89,15 @@ ColourConversion::rec601_to_xyz ()
 ColourConversion const &
 ColourConversion::rec709_to_xyz ()
 {
-	static ColourConversion* c = new ColourConversion (
-		shared_ptr<const TransferFunction> (new GammaTransferFunction (2.2)),
-		YUV_TO_RGB_REC709,
+	static auto c = new ColourConversion (
+		make_shared<GammaTransferFunction>(2.2),
+		YUVToRGB::REC709,
 		Chromaticity (0.64, 0.33),
 		Chromaticity (0.3, 0.6),
 		Chromaticity (0.15, 0.06),
 		Chromaticity::D65 (),
 		optional<Chromaticity> (),
-		shared_ptr<const TransferFunction> (new GammaTransferFunction (2.6))
+		make_shared<GammaTransferFunction>(2.6)
 		);
 	return *c;
 }
@@ -96,15 +105,15 @@ ColourConversion::rec709_to_xyz ()
 ColourConversion const &
 ColourConversion::p3_to_xyz ()
 {
-	static ColourConversion* c = new ColourConversion (
-		shared_ptr<const TransferFunction> (new GammaTransferFunction (2.6)),
-		YUV_TO_RGB_REC709,
+	static auto c = new ColourConversion (
+		make_shared<GammaTransferFunction>(2.6),
+		YUVToRGB::REC709,
 		Chromaticity (0.68, 0.32),
 		Chromaticity (0.265, 0.69),
 		Chromaticity (0.15, 0.06),
 		Chromaticity (0.314, 0.351),
 		optional<Chromaticity> (),
-		shared_ptr<const TransferFunction> (new GammaTransferFunction (2.6))
+		make_shared<GammaTransferFunction>(2.6)
 		);
 	return *c;
 }
@@ -115,15 +124,15 @@ ColourConversion::rec1886_to_xyz ()
 	/* According to Olivier on DCP-o-matic bug #832, Rec. 1886 is Rec. 709 with
 	   2.4 gamma, so here goes ...
 	*/
-	static ColourConversion* c = new ColourConversion (
-		shared_ptr<const TransferFunction> (new GammaTransferFunction (2.4)),
-		YUV_TO_RGB_REC709,
+	static auto c = new ColourConversion (
+		make_shared<GammaTransferFunction>(2.4),
+		YUVToRGB::REC709,
 		Chromaticity (0.64, 0.33),
 		Chromaticity (0.3, 0.6),
 		Chromaticity (0.15, 0.06),
 		Chromaticity::D65 (),
 		optional<Chromaticity> (),
-		shared_ptr<const TransferFunction> (new GammaTransferFunction (2.6))
+		make_shared<GammaTransferFunction>(2.6)
 		);
 	return *c;
 }
@@ -131,15 +140,15 @@ ColourConversion::rec1886_to_xyz ()
 ColourConversion const &
 ColourConversion::rec2020_to_xyz ()
 {
-	static ColourConversion* c = new ColourConversion (
-		shared_ptr<const TransferFunction> (new GammaTransferFunction (2.4)),
-		YUV_TO_RGB_REC709,
+	static auto c = new ColourConversion (
+		make_shared<GammaTransferFunction>(2.4),
+		YUVToRGB::REC709,
 		Chromaticity (0.708, 0.292),
 		Chromaticity (0.170, 0.797),
 		Chromaticity (0.131, 0.046),
 		Chromaticity::D65 (),
 		optional<Chromaticity> (),
-		shared_ptr<const TransferFunction> (new GammaTransferFunction (2.6))
+		make_shared<GammaTransferFunction>(2.6)
 		);
 	return *c;
 }
@@ -148,15 +157,15 @@ ColourConversion::rec2020_to_xyz ()
 ColourConversion const &
 ColourConversion::s_gamut3_to_xyz ()
 {
-	static ColourConversion* c = new ColourConversion (
-		shared_ptr<const TransferFunction> (new SGamut3TransferFunction ()),
-		YUV_TO_RGB_REC709,
+	static auto c = new ColourConversion (
+		make_shared<SGamut3TransferFunction>(),
+		YUVToRGB::REC709,
 		Chromaticity (0.73, 0.280),
 		Chromaticity (0.140, 0.855),
 		Chromaticity (0.100, -0.050),
 		Chromaticity::D65 (),
 		optional<Chromaticity> (),
-		shared_ptr<const TransferFunction> (new IdentityTransferFunction ())
+		make_shared<IdentityTransferFunction>()
 		);
 	return *c;
 }
@@ -184,6 +193,7 @@ ColourConversion::ColourConversion (
 {
 
 }
+
 
 bool
 ColourConversion::about_equal (ColourConversion const & other, float epsilon) const
@@ -216,6 +226,7 @@ ColourConversion::about_equal (ColourConversion const & other, float epsilon) co
 	return false;
 }
 
+
 boost::numeric::ublas::matrix<double>
 ColourConversion::rgb_to_xyz () const
 {
@@ -239,13 +250,14 @@ ColourConversion::rgb_to_xyz () const
 	return C;
 }
 
+
 boost::numeric::ublas::matrix<double>
 ColourConversion::xyz_to_rgb () const
 {
-	boost::numeric::ublas::matrix<double> A (rgb_to_xyz ());
+	boost::numeric::ublas::matrix<double> A (rgb_to_xyz());
 
 	/* permutation matrix for the LU-factorization */
-	boost::numeric::ublas::permutation_matrix<std::size_t> pm (A.size1 ());
+	boost::numeric::ublas::permutation_matrix<std::size_t> pm (A.size1());
 
 	/* perform LU-factorization */
 	int const r = lu_factorize (A, pm);
@@ -253,13 +265,14 @@ ColourConversion::xyz_to_rgb () const
 
 	/* create identity matrix of inverse */
 	boost::numeric::ublas::matrix<double> xyz_to_rgb (3, 3);
-	xyz_to_rgb.assign (boost::numeric::ublas::identity_matrix<double> (A.size1 ()));
+	xyz_to_rgb.assign (boost::numeric::ublas::identity_matrix<double> (A.size1()));
 
 	/* backsubstitute to get the inverse */
 	lu_substitute (A, pm, xyz_to_rgb);
 
 	return xyz_to_rgb;
 }
+
 
 boost::numeric::ublas::matrix<double>
 ColourConversion::bradford () const

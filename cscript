@@ -34,37 +34,28 @@
 import os
 import shutil
 
+option_defaults = { 'jpeg': 'oj2' }
+
 def dependencies(target, options):
-    if (target.platform == 'windows' and target.version == 'xp') or (options is not None and 'jpeg' in options and options['jpeg'] == 'oj1'):
-        return (('libcxml', '0d18df4'), ('openjpeg-cdist',  '4233dd7'), ('asdcplib-cth', 'd8490c6'))
+    libcxml = ('libcxml', 'v0.17.0')
+    if options['jpeg'] == 'oj1':
+        return (libcxml, ('openjpeg', 'f166257'), ('asdcplib', 'bb09615'))
     else:
-        return (('libcxml', '0d18df4'), ('openjpeg2-cdist', '8b2ffc5'), ('asdcplib-cth', 'd8490c6'))
+        return (libcxml, ('openjpeg', 'a1403c2'), ('asdcplib', 'bb09615'))
 
 def build(target, options):
-    cmd = './waf configure --disable-examples --prefix=%s' % target.directory
-    if options is not None and 'jpeg' in options:
-        cmd += ' --jpeg=%s' % options['jpeg']
+    cmd = './waf configure --disable-examples --disable-benchmarks --prefix=%s' % target.directory
+    cmd += ' --jpeg=%s' % options['jpeg']
     if target.platform == 'linux':
         cmd += ' --static'
         if not (target.distro == 'ubuntu' and target.version == '18.04'):
             # We only build tests on Ubuntu 18.04
             cmd += ' --disable-tests'
-        if target.distro == 'centos' and target.version == '7':
-            # Centos 7 ships with glibmm 2.50.0 which requires C++11
-            # but its compiler (gcc 4.8.5) defaults to C++97.  Go figure.
-            # I worry that this will cause ABI problems but I don't have
-            # a better solution.
-            cmd += ' --force-cpp11'
-        if target.distro == 'mageia' and target.version == '6':
-            # Mageia 6 pulls the same stunt except it's libxml++ that requires C++11
-            cmd += ' --force-cpp11'
     elif target.platform == 'windows':
         cmd += ' --target-windows --disable-gcov --disable-tests'
         if target.version == 'xp':
             # OpenJPEG 1.x is inexplicably faster on Windows XP; see DCP-o-matic bug #771
             cmd += ' --jpeg=oj1'
-    elif target.platform == 'osx':
-        cmd += ' --disable-tests'
 
     if target.debug:
         cmd += ' --enable-debug'
@@ -76,7 +67,7 @@ def package(target, version):
     if target.platform == 'windows':
         d = 'build/libdcp-%s' % version
         os.mkdir(d)
-        for f in ['asdcp-cth.dll', 'cxml-0.dll', 'dcp-1.0.dll', 'kumu-cth.dll', 'libopenjp2.dll', 'dcpinfo.exe']:
+        for f in ['asdcp-carl.dll', 'cxml-0.dll', 'dcp-1.0.dll', 'kumu-carl.dll', 'libopenjp2.dll', 'dcpinfo.exe']:
             shutil.copyfile('%s/bin/%s' % (target.directory, f), os.path.join(d, f))
 
         if target.bits == 32:

@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2014-2015 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2014-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,54 +31,61 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/colour_conversion.h
  *  @brief ColourConversion class.
  */
 
+
 #ifndef DCP_COLOUR_CONVERSION_H
 #define DCP_COLOUR_CONVERSION_H
 
+
 #include "chromaticity.h"
-#include <boost/shared_ptr.hpp>
+#include <memory>
 #if BOOST_VERSION >= 106400
 #include <boost/serialization/array_wrapper.hpp>
 #endif
 #include <boost/numeric/ublas/matrix.hpp>
 #include <boost/optional.hpp>
 
+
 namespace dcp {
+
 
 class TransferFunction;
 
-enum YUVToRGB {
-	YUV_TO_RGB_REC601,
-	YUV_TO_RGB_REC709,
-	YUV_TO_RGB_COUNT
+
+enum class YUVToRGB {
+	REC601,
+	REC709,
+	COUNT
 };
+
 
 /** @class ColourConversion
  *  @brief A representation of all the parameters involved the colourspace conversion
- *  of a YUV image to XYZ (via RGB).
+ *  of a YUV image to XYZ (via RGB)
  */
 class ColourConversion
 {
 public:
 	ColourConversion ()
-		: _yuv_to_rgb (YUV_TO_RGB_REC601)
+		: _yuv_to_rgb (YUVToRGB::REC601)
 	{}
 
 	ColourConversion (
-		boost::shared_ptr<const TransferFunction> in,
+		std::shared_ptr<const TransferFunction> in,
 		YUVToRGB yuv_to_rgb,
 		Chromaticity red,
 		Chromaticity green,
 		Chromaticity blue,
 		Chromaticity white,
 		boost::optional<Chromaticity> adjusted_white,
-		boost::shared_ptr<const TransferFunction> out
+		std::shared_ptr<const TransferFunction> out
 		);
 
-	boost::shared_ptr<const TransferFunction> in () const {
+	std::shared_ptr<const TransferFunction> in () const {
 		return _in;
 	}
 
@@ -106,11 +113,11 @@ public:
 		return _adjusted_white;
 	}
 
-	boost::shared_ptr<const TransferFunction> out () const {
+	std::shared_ptr<const TransferFunction> out () const {
 		return _out;
 	}
 
-	void set_in (boost::shared_ptr<const TransferFunction> f) {
+	void set_in (std::shared_ptr<const TransferFunction> f) {
 		_in = f;
 	}
 
@@ -142,7 +149,7 @@ public:
 		_adjusted_white = boost::optional<Chromaticity> ();
 	}
 
-	void set_out (boost::shared_ptr<const TransferFunction> f) {
+	void set_out (std::shared_ptr<const TransferFunction> f) {
 		_out = f;
 	}
 
@@ -162,7 +169,7 @@ public:
 
 protected:
 	/** Input transfer function (probably a gamma function, or something similar) */
-	boost::shared_ptr<const TransferFunction> _in;
+	std::shared_ptr<const TransferFunction> _in;
 	/** Conversion to use from YUV to RGB */
 	YUVToRGB _yuv_to_rgb;
 	Chromaticity _red;
@@ -172,9 +179,11 @@ protected:
 	/** White point that we are adjusting to using a Bradford matrix */
 	boost::optional<Chromaticity> _adjusted_white;
 	/** Output transfer function (probably an inverse gamma function, or something similar) */
-	boost::shared_ptr<const TransferFunction> _out;
+	std::shared_ptr<const TransferFunction> _out;
 };
 
+
 }
+
 
 #endif

@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2014 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,34 +31,38 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/picture_asset_writer.h
  *  @brief PictureAssetWriter and FrameInfo classes.
  */
 
+
 #ifndef LIBDCP_PICTURE_ASSET_WRITER_H
 #define LIBDCP_PICTURE_ASSET_WRITER_H
 
+
+#include "asset_writer.h"
 #include "metadata.h"
 #include "types.h"
-#include "asset_writer.h"
-#include <boost/shared_ptr.hpp>
 #include <boost/utility.hpp>
+#include <memory>
 #include <stdint.h>
 #include <string>
 
+
 namespace dcp {
 
+
+class Data;
 class PictureAsset;
+
 
 /** @class FrameInfo
  *  @brief Information about a single frame (either a monoscopic frame or a left *or* right eye stereoscopic frame)
  */
 struct FrameInfo
 {
-	FrameInfo ()
-		: offset (0)
-		, size (0)
-	{}
+	FrameInfo () {}
 
 	FrameInfo (uint64_t o, uint64_t s, std::string h)
 		: offset (o)
@@ -66,10 +70,11 @@ struct FrameInfo
 		, hash (h)
 	{}
 
-	uint64_t offset;
-	uint64_t size;
+	uint64_t offset = 0;
+	uint64_t size = 0;
 	std::string hash;
 };
+
 
 /** @class PictureAssetWriter
  *  @brief Parent class for classes which write picture assets.
@@ -80,16 +85,20 @@ public:
 	virtual FrameInfo write (uint8_t const *, int) = 0;
 	virtual void fake_write (int) = 0;
 
+	FrameInfo write (Data const& data);
+
 protected:
 	template <class P, class Q>
-	friend void start (PictureAssetWriter *, boost::shared_ptr<P>, Q *, uint8_t const *, int);
+	friend void start (PictureAssetWriter *, std::shared_ptr<P>, Q *, uint8_t const *, int);
 
 	PictureAssetWriter (PictureAsset *, boost::filesystem::path, bool);
 
-	PictureAsset* _picture_asset;
-	bool _overwrite;
+	PictureAsset* _picture_asset = nullptr;
+	bool _overwrite = false;
 };
 
+
 }
+
 
 #endif

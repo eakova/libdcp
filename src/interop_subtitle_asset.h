@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2015 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,19 +31,28 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/interop_subtitle_asset.h
- *  @brief InteropSubtitleAsset class.
+ *  @brief InteropSubtitleAsset class
  */
+
+
+#ifndef DCP_INTEROP_SUBTITLE_ASSET_H
+#define DCP_INTEROP_SUBTITLE_ASSET_H
+
 
 #include "subtitle_asset.h"
 #include <boost/filesystem.hpp>
 
+
 namespace dcp {
+
 
 class InteropLoadFontNode;
 
+
 /** @class InteropSubtitleAsset
- *  @brief A set of subtitles to be read and/or written in the Inter-Op format.
+ *  @brief A set of subtitles to be read and/or written in the Inter-Op format
  *
  *  Inter-Op subtitles are sometimes known as CineCanvas.
  */
@@ -54,22 +63,26 @@ public:
 	explicit InteropSubtitleAsset (boost::filesystem::path file);
 
 	bool equals (
-		boost::shared_ptr<const Asset>,
+		std::shared_ptr<const Asset>,
 		EqualityOptions,
 		NoteHandler note
-		) const;
+		) const override;
 
-	void write_to_assetmap (xmlpp::Node* node, boost::filesystem::path root) const;
-	void add_to_pkl (boost::shared_ptr<PKL> pkl, boost::filesystem::path root) const;
+	void write_to_assetmap (xmlpp::Node* node, boost::filesystem::path root) const override;
+	void add_to_pkl (std::shared_ptr<PKL> pkl, boost::filesystem::path root) const override;
 
-	std::list<boost::shared_ptr<LoadFontNode> > load_font_nodes () const;
+	std::vector<std::shared_ptr<LoadFontNode>> load_font_nodes () const override;
 
-	void add_font (std::string load_id, boost::filesystem::path file);
+	void add_font (std::string load_id, dcp::ArrayData data) override;
 
-	std::string xml_as_string () const;
-	void write (boost::filesystem::path path) const;
-	void resolve_fonts (std::list<boost::shared_ptr<Asset> > assets);
-	void add_font_assets (std::list<boost::shared_ptr<Asset> >& assets);
+	std::string xml_as_string () const override;
+
+	/** Write this content to an XML file with its fonts alongside */
+	void write (boost::filesystem::path path) const override;
+
+	void resolve_fonts (std::vector<std::shared_ptr<Asset>> assets);
+	void add_font_assets (std::vector<std::shared_ptr<Asset>>& assets);
+	void set_font_file (std::string load_id, boost::filesystem::path file);
 
 	/** Set the reel number or sub-element identifier
 	 *  of these subtitles.
@@ -108,13 +121,18 @@ public:
 		return _movie_title;
 	}
 
+	int time_code_rate () const override {
+		/* Interop can use either; just pick one */
+		return 1000;
+	}
+
 	static std::string static_pkl_type (Standard) {
 		return "text/xml;asdcpKind=Subtitle";
 	}
 
 protected:
 
-	std::string pkl_type (Standard s) const {
+	std::string pkl_type (Standard s) const override {
 		return static_pkl_type (s);
 	}
 
@@ -122,7 +140,12 @@ private:
 	std::string _reel_number;
 	std::string _language;
 	std::string _movie_title;
-	std::list<boost::shared_ptr<InteropLoadFontNode> > _load_font_nodes;
+	std::vector<std::shared_ptr<InteropLoadFontNode>> _load_font_nodes;
 };
 
+
 }
+
+
+#endif
+

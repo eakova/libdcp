@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2016 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2016-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,35 +31,41 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/frame.h
+ *  @brief Frame class
+ */
+
+
 #ifndef LIBDCP_FRAME_H
 #define LIBDCP_FRAME_H
+
 
 #include "crypto_context.h"
 #include "exceptions.h"
 #include <asdcp/KM_fileio.h>
 #include <asdcp/AS_DCP.h>
-#include <boost/noncopyable.hpp>
+
 
 namespace dcp {
 
+
 template <class R, class B>
-class Frame : public boost::noncopyable
+class Frame
 {
 public:
-	Frame (R* reader, int n, boost::shared_ptr<const DecryptionContext> c)
+	Frame (R* reader, int n, std::shared_ptr<const DecryptionContext> c)
 	{
 		/* XXX: unfortunate guesswork on this buffer size */
-		_buffer = new B (Kumu::Megabyte);
+		_buffer = std::make_shared<B>(Kumu::Megabyte);
 
-		if (ASDCP_FAILURE (reader->ReadFrame (n, *_buffer, c->context(), c->hmac()))) {
-			boost::throw_exception (DCPReadError ("could not read frame"));
+		if (ASDCP_FAILURE(reader->ReadFrame(n, *_buffer, c->context(), c->hmac()))) {
+			boost::throw_exception (ReadError ("could not read frame"));
 		}
 	}
 
-	~Frame ()
-	{
-		delete _buffer;
-	}
+	Frame (Frame const&) = delete;
+	Frame& operator= (Frame const&) = delete;
 
 	uint8_t const * data () const
 	{
@@ -72,9 +78,11 @@ public:
 	}
 
 private:
-	B* _buffer;
+	std::shared_ptr<B> _buffer;
 };
 
+
 }
+
 
 #endif

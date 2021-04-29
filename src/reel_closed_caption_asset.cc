@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2017 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,88 +31,51 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/reel_closed_caption_asset.cc
- *  @brief ReelClosedCaptionAsset class.
+ *  @brief ReelClosedCaptionAsset class
  */
 
-#include "subtitle_asset.h"
+
+#include "dcp_assert.h"
 #include "reel_closed_caption_asset.h"
 #include "smpte_subtitle_asset.h"
-#include "dcp_assert.h"
+#include "subtitle_asset.h"
+#include "warnings.h"
+LIBDCP_DISABLE_WARNINGS
 #include <libxml++/libxml++.h>
+LIBDCP_ENABLE_WARNINGS
+
 
 using std::string;
 using std::pair;
 using std::make_pair;
-using boost::shared_ptr;
-using boost::dynamic_pointer_cast;
+using std::shared_ptr;
+using std::dynamic_pointer_cast;
 using boost::optional;
 using namespace dcp;
 
-ReelClosedCaptionAsset::ReelClosedCaptionAsset (boost::shared_ptr<SubtitleAsset> asset, Fraction edit_rate, int64_t intrinsic_duration, int64_t entry_point)
-	: ReelAsset (asset->id(), edit_rate, intrinsic_duration, entry_point)
-	, ReelMXF (asset, dynamic_pointer_cast<SMPTESubtitleAsset>(asset) ? dynamic_pointer_cast<SMPTESubtitleAsset>(asset)->key_id() : optional<string>())
+
+ReelClosedCaptionAsset::ReelClosedCaptionAsset (std::shared_ptr<SubtitleAsset> asset, Fraction edit_rate, int64_t intrinsic_duration, int64_t entry_point)
+	: ReelFileAsset (
+		asset,
+		dynamic_pointer_cast<SMPTESubtitleAsset>(asset) ? dynamic_pointer_cast<SMPTESubtitleAsset>(asset)->key_id() : boost::none,
+		asset->id(),
+		edit_rate,
+		intrinsic_duration,
+		entry_point
+		)
 {
 
 }
 
-ReelClosedCaptionAsset::ReelClosedCaptionAsset (boost::shared_ptr<const cxml::Node> node)
-	: ReelAsset (node)
-	, ReelMXF (node)
+
+ReelClosedCaptionAsset::ReelClosedCaptionAsset (std::shared_ptr<const cxml::Node> node)
+	: ReelFileAsset (node)
 {
 	_language = node->optional_string_child ("Language");
-	node->done ();
 }
 
-string
-ReelClosedCaptionAsset::cpl_node_name (Standard standard) const
-{
-	switch (standard) {
-	case INTEROP:
-		return "cc-cpl:MainClosedCaption";
-	case SMPTE:
-		return "tt:ClosedCaption";
-	}
-
-	DCP_ASSERT (false);
-}
-
-pair<string, string>
-ReelClosedCaptionAsset::cpl_node_namespace (Standard standard) const
-{
-	switch (standard) {
-	case INTEROP:
-		return make_pair ("http://www.digicine.com/PROTO-ASDCP-CC-CPL-20070926#", "cc-cpl");
-	case SMPTE:
-		return make_pair ("http://www.smpte-ra.org/schemas/429-12/2008/TT", "tt");
-	}
-
-	DCP_ASSERT (false);
-}
-
-string
-ReelClosedCaptionAsset::key_type () const
-{
-	return "MDSK";
-}
-
-xmlpp::Node *
-ReelClosedCaptionAsset::write_to_cpl (xmlpp::Node* node, Standard standard) const
-{
-	xmlpp::Node* asset = write_to_cpl_base (node, standard, hash());
-
-        if (key_id()) {
-		/* Find <Hash> */
-		xmlpp::Node* hash = find_child (asset, "Hash");
-		asset->add_child_before(hash, "KeyId")->add_child_text("urn:uuid:" + key_id().get());
-	}
-
-	if (_language) {
-		asset->add_child("Language")->add_child_text(*_language);
-	}
-
-	return asset;
-}
 
 bool
 ReelClosedCaptionAsset::equals (shared_ptr<const ReelClosedCaptionAsset> other, EqualityOptions opt, NoteHandler note) const
@@ -120,9 +83,11 @@ ReelClosedCaptionAsset::equals (shared_ptr<const ReelClosedCaptionAsset> other, 
 	if (!asset_equals (other, opt, note)) {
 		return false;
 	}
-	if (!mxf_equals (other, opt, note)) {
+	if (!file_asset_equals (other, opt, note)) {
 		return false;
 	}
 
 	return true;
 }
+
+

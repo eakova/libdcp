@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2012-2019 Carl Hetherington <cth@carlh.net>
+#    Copyright (C) 2012-2020 Carl Hetherington <cth@carlh.net>
 #
 #    This file is part of libdcp.
 #
@@ -54,21 +54,19 @@ def options(opt):
     opt.load('compiler_cxx')
     opt.add_option('--target-windows', action='store_true', default=False, help='set up to do a cross-compile to Windows')
     opt.add_option('--enable-debug', action='store_true', default=False, help='build with debugging information and without optimisation')
-    opt.add_option('--static', action='store_true', default=False, help='build libdcp statically, and link statically to openjpeg, cxml, asdcplib-cth')
+    opt.add_option('--static', action='store_true', default=False, help='build libdcp statically, and link statically to openjpeg, cxml, asdcplib-carl')
     opt.add_option('--disable-tests', action='store_true', default=False, help='disable building of tests')
+    opt.add_option('--disable-benchmarks', action='store_true', default=False, help='disable building of benchmarks')
     opt.add_option('--disable-gcov', action='store_true', default=False, help='don''t use gcov in tests')
     opt.add_option('--disable-examples', action='store_true', default=False, help='disable building of examples')
     opt.add_option('--enable-openmp', action='store_true', default=False, help='enable use of OpenMP')
     opt.add_option('--openmp', default='gomp', help='specify OpenMP Library to use: omp, gomp (default), iomp')
     opt.add_option('--jpeg', default='oj2', help='specify JPEG library to build with: oj1 or oj2 for OpenJPEG 1.5.x or OpenJPEG 2.1.x respectively')
-    opt.add_option('--force-cpp11', action='store_true', default=False, help='force use of C++11')
 
 def configure(conf):
     conf.load('compiler_cxx')
     conf.load('clang_compilation_database', tooldir=['waf-tools'])
-    conf.env.append_value('CXXFLAGS', ['-Wall', '-Wextra', '-D_FILE_OFFSET_BITS=64', '-D__STDC_FORMAT_MACROS'])
-    if conf.options.force_cpp11:
-        conf.env.append_value('CXXFLAGS', ['-std=c++11', '-DBOOST_NO_CXX11_SCOPED_ENUMS'])
+    conf.env.append_value('CXXFLAGS', ['-Wall', '-Wextra', '-D_FILE_OFFSET_BITS=64', '-D__STDC_FORMAT_MACROS', '-std=c++11'])
     gcc = conf.env['CC_VERSION']
     if int(gcc[0]) >= 4 and int(gcc[1]) > 1:
         conf.env.append_value('CXXFLAGS', ['-Wno-maybe-uninitialized'])
@@ -76,19 +74,26 @@ def configure(conf):
 
     conf.env.TARGET_WINDOWS = conf.options.target_windows
     conf.env.TARGET_OSX = sys.platform == 'darwin'
+    conf.env.TARGET_LINUX = not conf.env.TARGET_WINDOWS and not conf.env.TARGET_OSX
     conf.env.ENABLE_DEBUG = conf.options.enable_debug
     conf.env.DISABLE_TESTS = conf.options.disable_tests
+    conf.env.DISABLE_BENCHMARKS = conf.options.disable_benchmarks
     conf.env.DISABLE_EXAMPLES = conf.options.disable_examples
     conf.env.STATIC = conf.options.static
     conf.env.API_VERSION = API_VERSION
 
-    if conf.options.target_windows:
+    if conf.env.TARGET_WINDOWS:
         conf.env.append_value('CXXFLAGS', '-DLIBDCP_WINDOWS')
-    else:
-        conf.env.append_value('CXXFLAGS', '-DLIBDCP_POSIX')
+    if conf.env.TARGET_OSX:
+        conf.env.append_value('CXXFLAGS', '-DLIBDCP_OSX')
+    if conf.env.TARGET_LINUX:
+        conf.env.append_value('CXXFLAGS', '-DLIBDCP_LINUX')
 
     if conf.env.TARGET_OSX:
         conf.env.append_value('CXXFLAGS', ['-Wno-unused-result', '-Wno-unused-parameter', '-Wno-unused-local-typedef'])
+        conf.env.append_value('LINKFLAGS', '-headerpad_max_install_names')
+    else:
+        conf.env.append_value('CXXFLAGS', ['-Wsuggest-override'])
 
     # Disable libxml++ deprecation warnings for now
     conf.env.append_value('CXXFLAGS', ['-Wno-deprecated-declarations'])
@@ -101,6 +106,9 @@ def configure(conf):
 
     if not conf.env.TARGET_WINDOWS:
         conf.env.append_value('LINKFLAGS', '-pthread')
+
+    if conf.env.TARGET_LINUX:
+        conf.check(lib='dl', uselib_store='DL', msg='Checking for library dl')
 
     if conf.options.jpeg == 'oj1':
         conf.env.append_value('CXXFLAGS', ['-DLIBDCP_OPENJPEG1'])
@@ -133,19 +141,27 @@ def configure(conf):
         elif conf.options.jpeg == 'oj1':
             conf.check_cfg(package='libopenjpeg1', args='--cflags', atleast_version='1.5.0', uselib_store='OPENJPEG', mandatory=True)
             conf.env.STLIB_OPENJPEG = ['openjpeg']
-        conf.check_cfg(package='libasdcp-cth', atleast_version='0.1.3', args='--cflags', uselib_store='ASDCPLIB_CTH', mandatory=True)
+        conf.check_cfg(package='libasdcp-carl', atleast_version='0.1.3', args='--cflags', uselib_store='ASDCPLIB_CTH', mandatory=True)
         conf.env.HAVE_ASDCPLIB_CTH = 1
-        conf.env.STLIB_ASDCPLIB_CTH = ['asdcp-cth', 'kumu-cth']
+        conf.env.STLIB_ASDCPLIB_CTH = ['asdcp-carl', 'kumu-carl']
         conf.env.HAVE_CXML = 1
         conf.env.LIB_CXML = ['xml++-2.6', 'glibmm-2.4']
         conf.env.STLIB_CXML = ['cxml']
+        conf.check_cfg(package='xerces-c', args='--cflags', uselib_store='XERCES', mandatory=True)
+        conf.env.LIB_XERCES = ['xerces-c', 'icuuc', 'curl']
     else:
         if conf.options.jpeg == 'oj2':
             conf.check_cfg(package='libopenjp2', args='--cflags --libs', atleast_version='2.1.0', uselib_store='OPENJPEG', mandatory=True)
         elif conf.options.jpeg == 'oj1':
             conf.check_cfg(package='libopenjpeg1', args='--cflags --libs', atleast_version='1.5.0', uselib_store='OPENJPEG', mandatory=True)
-        conf.check_cfg(package='libasdcp-cth', atleast_version='0.1.3', args='--cflags --libs', uselib_store='ASDCPLIB_CTH', mandatory=True)
-        conf.check_cfg(package='libcxml', atleast_version='0.16.0', args='--cflags --libs', uselib_store='CXML', mandatory=True)
+        conf.check_cfg(package='libasdcp-carl', atleast_version='0.1.3', args='--cflags --libs', uselib_store='ASDCPLIB_CTH', mandatory=True)
+        conf.check_cfg(package='libcxml', atleast_version='0.17.0', args='--cflags --libs', uselib_store='CXML', mandatory=True)
+        conf.check_cfg(package='xerces-c', args='--cflags --libs', uselib_store='XERCES', mandatory=True)
+
+    if conf.options.target_windows:
+        # XXX: it feels like there should be a more elegant way to get these included
+        conf.env.LIB_XERCES.append('curl')
+        conf.env.LIB_XERCES.append('ws2_32')
 
     if conf.options.target_windows:
         boost_lib_suffix = '-mt'
@@ -159,17 +175,21 @@ def configure(conf):
         # Windows builds are any more reliable
         conf.env.append_value('CXXFLAGS', '-O2')
 
+    # We support older boosts on Linux so we can use the distribution-provided package
+    # on Centos 7, but it's good if we can use 1.61 for boost::dll::program_location()
+    boost_version = ('1.45', '104500') if conf.env.TARGET_LINUX else ('1.61', '106800')
+
     conf.check_cxx(fragment="""
                             #include <boost/version.hpp>\n
-                            #if BOOST_VERSION < 104500\n
+                            #if BOOST_VERSION < %s\n
                             #error boost too old\n
                             #endif\n
                             int main(void) { return 0; }\n
-                            """,
+                            """ % boost_version[1],
                    mandatory=True,
-                   msg='Checking for boost library >= 1.45',
+                   msg='Checking for boost library >= %s' % boost_version[0],
                    okmsg='yes',
-                   errmsg='too old\nPlease install boost version 1.45 or higher.')
+                   errmsg='too old\nPlease install boost version %s or higher.' % boost_version[0])
 
     conf.check_cxx(fragment="""
     			    #include <boost/filesystem.hpp>\n
@@ -210,10 +230,14 @@ def build(bld):
     else:
         boost_lib_suffix = ''
 
+    libs="-L${libdir} -ldcp%s -lcxml -lboost_system%s" % (bld.env.API_VERSION, boost_lib_suffix)
+    if bld.env.TARGET_LINUX:
+        libs += " -ldl"
+
     bld(source='libdcp%s.pc.in' % bld.env.API_VERSION,
         version=VERSION,
         includedir='%s/include/libdcp%s' % (bld.env.PREFIX, bld.env.API_VERSION),
-        libs="-L${libdir} -ldcp%s -lcxml -lboost_system%s" % (bld.env.API_VERSION, boost_lib_suffix),
+        libs=libs,
         install_path='${LIBDIR}/pkgconfig')
 
     bld.recurse('src')
@@ -222,6 +246,14 @@ def build(bld):
         bld.recurse('test')
     if not bld.env.DISABLE_EXAMPLES:
         bld.recurse('examples')
+    if not bld.env.DISABLE_BENCHMARKS:
+        bld.recurse('benchmark')
+
+    for i in os.listdir('xsd'):
+        bld.install_files('${PREFIX}/share/libdcp/xsd', os.path.join('xsd', i))
+
+    for i in ['language', 'region', 'script', 'variant', 'extlang', 'dcnc']:
+        bld.install_files('${PREFIX}/share/libdcp/tags', os.path.join('tags', i))
 
     bld.add_post_fun(post)
 

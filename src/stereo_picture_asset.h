@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2015 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,15 +31,26 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/stereo_picture_asset.h
+ *  @brief StereoPictureAsset class
+ */
+
+
 #ifndef LIBDCP_STEREO_PICTURE_ASSET_H
 #define LIBDCP_STEREO_PICTURE_ASSET_H
+
 
 #include "picture_asset.h"
 #include "stereo_picture_asset_reader.h"
 
+
 namespace dcp {
 
-/** A 3D (stereoscopic) picture asset */
+
+/** @class StereoPictureAsset
+ *  @brief A 3D (stereoscopic) picture asset
+ */
 class StereoPictureAsset : public PictureAsset
 {
 public:
@@ -47,16 +58,18 @@ public:
 	explicit StereoPictureAsset (Fraction edit_rate, Standard standard);
 
 	/** Start a progressive write to a StereoPictureAsset */
-	boost::shared_ptr<PictureAssetWriter> start_write (boost::filesystem::path file, bool);
-	boost::shared_ptr<StereoPictureAssetReader> start_read () const;
+	std::shared_ptr<PictureAssetWriter> start_write (boost::filesystem::path file, bool) override;
+	std::shared_ptr<StereoPictureAssetReader> start_read () const;
 
 	bool equals (
-		boost::shared_ptr<const Asset> other,
+		std::shared_ptr<const Asset> other,
 		EqualityOptions opt,
 		NoteHandler note
-		) const;
+		) const override;
 };
 
+
 }
+
 
 #endif

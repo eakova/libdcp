@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2014 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,32 +31,41 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/transfer_function.h
- *  @brief TransferFunction class.
+ *  @brief TransferFunction class
  */
+
 
 #ifndef LIBDCP_TRANSFER_FUNCTION_H
 #define LIBDCP_TRANSFER_FUNCTION_H
 
-#include <boost/noncopyable.hpp>
-#include <boost/shared_ptr.hpp>
+
 #include <boost/thread/mutex.hpp>
 #include <map>
+#include <memory>
+
 
 namespace dcp {
+
 
 /** @class TransferFunction
  *  @brief A transfer function represented by a lookup table.
  */
-class TransferFunction : public boost::noncopyable
+class TransferFunction
 {
 public:
+	TransferFunction () {}
+
+	TransferFunction (TransferFunction const&) = delete;
+	TransferFunction& operator= (TransferFunction const&) = delete;
+
 	virtual ~TransferFunction ();
 
 	/** @return A look-up table (of size 2^bit_depth) whose values range from 0 to 1 */
 	double const * lut (int bit_depth, bool inverse) const;
 
-	virtual bool about_equal (boost::shared_ptr<const TransferFunction> other, double epsilon) const = 0;
+	virtual bool about_equal (std::shared_ptr<const TransferFunction> other, double epsilon) const = 0;
 
 protected:
 	/** Make a LUT and return an array allocated by new */
@@ -68,6 +77,8 @@ private:
 	mutable boost::mutex _mutex;
 };
 
+
 }
+
 
 #endif

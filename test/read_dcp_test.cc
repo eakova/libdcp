@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2013-2019 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2013-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -35,9 +35,10 @@
 #include <boost/optional/optional_io.hpp>
 #include "dcp.h"
 #include "cpl.h"
+#include "stream_operators.h"
 
 using std::list;
-using boost::shared_ptr;
+using std::shared_ptr;
 
 /** Read a SMPTE DCP that is in git and make sure that basic stuff is read in correctly */
 BOOST_AUTO_TEST_CASE (read_dcp_test1)
@@ -45,13 +46,14 @@ BOOST_AUTO_TEST_CASE (read_dcp_test1)
 	dcp::DCP d ("test/ref/DCP/dcp_test1");
 	d.read ();
 
-	list<shared_ptr<dcp::CPL> > cpls = d.cpls ();
+	auto cpls = d.cpls ();
 	BOOST_CHECK_EQUAL (cpls.size(), 1);
 
-	BOOST_CHECK_EQUAL (cpls.front()->annotation_text(), "A Test DCP");
-	BOOST_CHECK_EQUAL (cpls.front()->content_kind(), dcp::FEATURE);
+	BOOST_REQUIRE (cpls[0]->annotation_text());
+	BOOST_CHECK_EQUAL (cpls[0]->annotation_text().get(), "A Test DCP");
+	BOOST_CHECK_EQUAL (cpls[0]->content_kind(), dcp::ContentKind::TRAILER);
 	BOOST_REQUIRE (d.standard());
-	BOOST_CHECK_EQUAL (d.standard(), dcp::SMPTE);
+	BOOST_CHECK_EQUAL (d.standard(), dcp::Standard::SMPTE);
 }
 
 /** Read an Interop DCP that is in git and make sure that basic stuff is read in correctly */
@@ -60,11 +62,12 @@ BOOST_AUTO_TEST_CASE (read_dcp_test2)
 	dcp::DCP d ("test/ref/DCP/dcp_test3");
 	d.read ();
 
-	list<shared_ptr<dcp::CPL> > cpls = d.cpls ();
+	auto cpls = d.cpls ();
 	BOOST_CHECK_EQUAL (cpls.size(), 1);
 
-	BOOST_CHECK_EQUAL (cpls.front()->annotation_text(), "Test_FTR-1_F-119_10_2K_20160524_IOP_OV");
-	BOOST_CHECK_EQUAL (cpls.front()->content_kind(), dcp::FEATURE);
+	BOOST_REQUIRE (cpls[0]->annotation_text());
+	BOOST_CHECK_EQUAL (cpls[0]->annotation_text().get(), "Test_FTR-1_F-119_10_2K_20160524_IOP_OV");
+	BOOST_CHECK_EQUAL (cpls[0]->content_kind(), dcp::ContentKind::FEATURE);
 	BOOST_REQUIRE (d.standard());
-	BOOST_CHECK_EQUAL (d.standard(), dcp::INTEROP);
+	BOOST_CHECK_EQUAL (d.standard(), dcp::Standard::INTEROP);
 }

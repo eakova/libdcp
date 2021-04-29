@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CompositionPlaylist xmlns="http://www.digicine.com/PROTO-ASDCP-CPL-20040511#">
+  <Id>urn:uuid:81fb54df-e1bf-4647-8788-ea7ba154375b</Id>
+  <AnnotationText>A Test DCP</AnnotationText>
+  <IssueDate>2012-07-17T04:45:18+00:00</IssueDate>
+  <Issuer>OpenDCP 0.0.25</Issuer>
+  <Creator>OpenDCP 0.0.25</Creator>
+  <ContentTitleText>A Test DCP</ContentTitleText>
+  <ContentKind>trailer</ContentKind>
+  <ContentVersion>
+    <Id>urn:uuid:75ac29aa-42ac-1234-ecae-49251abefd11</Id>
+    <LabelText>content-version-label-text</LabelText>
+  </ContentVersion>
+  <RatingList/>
+  <ReelList>
+    <Reel>
+      <Id>urn:uuid:7b6616d2-9afe-4d54-a2bb-4f3f71ac6e0c</Id>
+      <AssetList>
+        <MainMarkers>
+          <Id>urn:uuid:793170e7-e913-404b-8942-1c7f2e5cf012</Id>
+          <AnnotationText></AnnotationText>
+          <EditRate>24 1</EditRate>
+          <IntrinsicDuration>24</IntrinsicDuration>
+          <EntryPoint>0</EntryPoint>
+          <Duration>24</Duration>
+          <MarkerList>
+            <Marker>
+              <Label>FFOC</Label>
+              <Offset>1</Offset>
+            </Marker>
+            <Marker>
+              <Label>LFOC</Label>
+              <Offset>23</Offset>
+            </Marker>
+          </MarkerList>
+        </MainMarkers>
+        <MainPicture>
+          <Id>urn:uuid:1fab8bb0-cfaf-4225-ad6d-01768bc10470</Id>
+          <AnnotationText></AnnotationText>
+          <EditRate>24 1</EditRate>
+          <IntrinsicDuration>24</IntrinsicDuration>
+          <EntryPoint>0</EntryPoint>
+          <Duration>24</Duration>
+          <Hash>addO7je2lZSNQp55qjCWo5DLKFQ=</Hash>
+          <FrameRate>24 1</FrameRate>
+          <ScreenAspectRatio>1.85</ScreenAspectRatio>
+        </MainPicture>
+        <MainSound>
+          <Id>urn:uuid:9482e87d-292d-4e0e-a98d-c61822b60fe9</Id>
+          <AnnotationText></AnnotationText>
+          <EditRate>24 1</EditRate>
+          <IntrinsicDuration>24</IntrinsicDuration>
+          <EntryPoint>0</EntryPoint>
+          <Duration>24</Duration>
+          <Hash>WU0/u1wM17y7Kriq06+65/ViX1o=</Hash>
+        </MainSound>
+      </AssetList>
+    </Reel>
+  </ReelList>
+</CompositionPlaylist>

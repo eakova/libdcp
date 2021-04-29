@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2014 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,19 +31,29 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/sound_asset_writer.h
- *  @brief SoundAssetWriter class.
+ *  @brief SoundAssetWriter class
  */
 
+
 #include "asset_writer.h"
+#include "fsk.h"
 #include "types.h"
 #include "sound_frame.h"
-#include <boost/shared_ptr.hpp>
+#include <memory>
 #include <boost/filesystem.hpp>
+#include <boost/shared_array.hpp>
+
+
+struct sync_test1;
+
 
 namespace dcp {
 
+
 class SoundAsset;
+
 
 /** @class SoundAssetWriter
  *  @brief A helper class for writing to SoundAssets.
@@ -57,25 +67,38 @@ class SoundAsset;
 class SoundAssetWriter : public AssetWriter
 {
 public:
+	/** @param data Pointer an array of float pointers, one for each channel.
+	 *  @param frames Number of frames i.e. number of floats that are given for each channel.
+	 */
 	void write (float const * const *, int);
-	bool finalize ();
+
+	bool finalize () override;
 
 private:
 	friend class SoundAsset;
+	friend struct ::sync_test1;
 
-	SoundAssetWriter (SoundAsset *, boost::filesystem::path);
+	SoundAssetWriter (SoundAsset *, boost::filesystem::path, bool sync);
 
+	void start ();
 	void write_current_frame ();
+	std::vector<bool> create_sync_packets ();
 
 	/* do this with an opaque pointer so we don't have to include
 	   ASDCP headers
 	*/
 
 	struct ASDCPState;
-	boost::shared_ptr<ASDCPState> _state;
+	std::shared_ptr<ASDCPState> _state;
 
-	SoundAsset* _asset;
-	int _frame_buffer_offset;
+	SoundAsset* _asset = nullptr;
+	int _frame_buffer_offset = 0;
+
+	/** true to ignore any signal passed to write() on channel 14 and instead write a sync track */
+	bool _sync = false;
+	/** index of the sync packet (0-3) which starts the next edit unit */
+	int _sync_packet = 0;
+	FSK _fsk;
 };
 
 }

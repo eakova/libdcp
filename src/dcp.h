@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2014 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,47 +31,55 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/dcp.h
- *  @brief DCP class.
+ *  @brief DCP class
  */
+
 
 #ifndef LIBDCP_DCP_H
 #define LIBDCP_DCP_H
 
+
+#include "compose.hpp"
 #include "types.h"
 #include "util.h"
 #include "certificate.h"
 #include "metadata.h"
 #include "name_format.h"
-#include <boost/shared_ptr.hpp>
+#include "verify.h"
+#include "version.h"
 #include <boost/signals2.hpp>
+#include <memory>
 #include <string>
 #include <vector>
+
 
 namespace xmlpp {
 	class Document;
 	class Element;
 }
 
+
 /** @brief Namespace for everything in libdcp */
 namespace dcp
 {
+
 
 class PKL;
 class Content;
 class Reel;
 class CPL;
-class XMLMetadata;
 class CertificateChain;
 class DecryptedKDM;
 class Asset;
-class DCPReadError;
+class ReadError;
+
 
 /** @class DCP
- *  @brief A class to create or read a DCP.
+ *  @brief A class to create or read a DCP
  */
-
-class DCP : public boost::noncopyable
+class DCP
 {
 public:
 	/** Construct a DCP.  You can pass an existing DCP's directory
@@ -83,16 +91,28 @@ public:
 	 */
 	explicit DCP (boost::filesystem::path directory);
 
-	typedef std::list<boost::shared_ptr<DCPReadError> > ReadErrors;
+	DCP (DCP const&) = delete;
+	DCP& operator= (DCP const&) = delete;
 
-	/** Read the DCP's structure into this object.
-	 *  @param keep_going true to try to keep going in the face of (some) errors.
-	 *  @param errors List of errors that will be added to if keep_going is true.
+	/** Read a DCP.  This method does not do any deep checking of the DCP's validity, but
+	 *  if it comes across any bad things it will do one of two things.
+	 *
+	 *  Errors that are so serious that they prevent the method from working will result
+	 *  in an exception being thrown.  For example, a missing ASSETMAP means that the DCP
+	 *  can't be read without a lot of guesswork, so this will throw.
+	 *
+	 *  Errors that are not fatal will be added to notes, if it's non-null.  For example,
+	 *  if the DCP contains a mixture of Interop and SMPTE elements this will result
+	 *  in a note being added to the vector.
+	 *
+	 *  For more thorough checking of a DCP's contents, see dcp::verify().
+	 *
+	 *  @param notes List of notes that will be added to if non-0.
 	 *  @param ignore_incorrect_picture_mxf_type true to try loading MXF files marked as monoscopic
 	 *  as stereoscopic if the monoscopic load fails; fixes problems some 3D DCPs that (I think)
 	 *  have an incorrect descriptor in their MXF.
 	 */
-	void read (bool keep_going = false, ReadErrors* errors = 0, bool ignore_incorrect_picture_mxf_type = false);
+	void read (std::vector<VerificationNote>* notes = nullptr, bool ignore_incorrect_picture_mxf_type = false);
 
 	/** Compare this DCP with another, according to various options.
 	 *  @param other DCP to compare this one to.
@@ -102,23 +122,44 @@ public:
 	 */
 	bool equals (DCP const & other, EqualityOptions options, NoteHandler note) const;
 
-	void add (boost::shared_ptr<CPL> cpl);
+	void add (std::shared_ptr<CPL> cpl);
 
-	std::list<boost::shared_ptr<CPL> > cpls () const;
-	std::list<boost::shared_ptr<Asset> > assets (bool ignore_unresolved = false) const;
+	std::vector<std::shared_ptr<CPL>> cpls () const;
 
-	bool encrypted () const;
+	/** @param ignore_unresolved true to silently ignore unresolved assets, otherwise
+	 *  an exception is thrown if they are found.
+	 *  @return All assets (including CPLs).
+	 */
+	std::vector<std::shared_ptr<Asset>> assets (bool ignore_unresolved = false) const;
 
+	bool any_encrypted () const;
+	bool all_encrypted () const;
+
+	/** Add a KDM to decrypt this DCP.  This method must be called after DCP::read()
+	 *  or the KDM you specify will be ignored.
+	 *  @param kdm KDM to use.
+	 */
 	void add (DecryptedKDM const &);
 
+	/** Write all the XML files for this DCP
+	 *  @param standand INTEROP or SMPTE
+	 *  @param issuer Value for the PKL and AssetMap <Issuer> tags
+	 *  @param creator Value for the PKL and AssetMap <Creator> tags
+	 *  @param issue_date Value for the CPL <IssueDate> tags
+	 *  @param annotation_text Value for the CPL <AnnotationText> tags
+	 *  @param signer Signer to use
+	 *  @param name_format Name format to use for the CPL and PKL filenames
+	 */
 	void write_xml (
-		Standard standard,
-		XMLMetadata metadata = XMLMetadata (),
-		boost::shared_ptr<const CertificateChain> signer = boost::shared_ptr<const CertificateChain> (),
+		std::string issuer = String::compose("libdcp %1", dcp::version),
+		std::string creator = String::compose("libdcp %1", dcp::version),
+		std::string issue_date = LocalTime().as_string(),
+		std::string annotation_text = String::compose("Created by libdcp %1", dcp::version),
+		std::shared_ptr<const CertificateChain> signer = std::shared_ptr<const CertificateChain>(),
 		NameFormat name_format = NameFormat("%t")
 	);
 
-	void resolve_refs (std::list<boost::shared_ptr<Asset> > assets);
+	void resolve_refs (std::vector<std::shared_ptr<Asset>> assets);
 
 	/** @return Standard of a DCP that was read in */
 	boost::optional<Standard> standard () const {
@@ -130,10 +171,14 @@ public:
 	}
 
 	/** @return PKLs if this DCP was read from an existing one, or if write_xml() has been called on it.
-	 *  If neither is true, this method returns an empty list.
+	 *  If neither is true, this method returns an empty vector.
 	 */
-	std::list<boost::shared_ptr<PKL> > pkls () const {
+	std::vector<std::shared_ptr<PKL>> pkls () const {
 		return _pkls;
+	}
+
+	boost::optional<boost::filesystem::path> asset_map_path () {
+		return _asset_map;
 	}
 
 	static std::vector<boost::filesystem::path> directories_from_files (std::vector<boost::filesystem::path> files);
@@ -146,18 +191,26 @@ private:
 	 *  @param pkl_uuid UUID of our PKL.
 	 *  @param pkl_path Pathname of our PKL file.
 	 */
-	void write_assetmap (Standard standard, std::string pkl_uuid, boost::filesystem::path pkl_path, XMLMetadata metadata) const;
+	void write_assetmap (
+		Standard standard, std::string pkl_uuid, boost::filesystem::path pkl_path,
+		std::string issuer, std::string creator, std::string issue_date, std::string annotation_text
+		) const;
 
-	/** the directory that we are writing to */
+	/** The directory that we are writing to */
 	boost::filesystem::path _directory;
-	/** the CPLs that make up this DCP */
-	std::list<boost::shared_ptr<CPL> > _cpls;
-	std::list<boost::shared_ptr<PKL> > _pkls;
+	/** The CPLs that make up this DCP */
+	std::vector<std::shared_ptr<CPL>> _cpls;
+	/** The PKLs that make up this DCP */
+	std::vector<std::shared_ptr<PKL>> _pkls;
+	/** File that the ASSETMAP was read from or last written to */
+	mutable boost::optional<boost::filesystem::path> _asset_map;
 
 	/** Standard of DCP that was read in */
 	boost::optional<Standard> _standard;
 };
 
+
 }
+
 
 #endif

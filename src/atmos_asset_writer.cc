@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2016 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2016-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,6 +31,12 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/atmos_asset_writer.cc
+ *  @brief AtmosAssetWriter class
+ */
+
+
 #include "atmos_asset_writer.h"
 #include "atmos_asset.h"
 #include "exceptions.h"
@@ -39,9 +45,12 @@
 #include "crypto_context.h"
 #include <asdcp/AS_DCP.h>
 
+
 using std::min;
 using std::max;
+using std::shared_ptr;
 using namespace dcp;
+
 
 struct AtmosAssetWriter::ASDCPState
 {
@@ -50,6 +59,7 @@ struct AtmosAssetWriter::ASDCPState
 	ASDCP::WriterInfo writer_info;
 	ASDCP::ATMOS::AtmosDescriptor desc;
 };
+
 
 AtmosAssetWriter::AtmosAssetWriter (AtmosAsset* asset, boost::filesystem::path file)
 	: AssetWriter (asset, file)
@@ -65,10 +75,18 @@ AtmosAssetWriter::AtmosAssetWriter (AtmosAsset* asset, boost::filesystem::path f
 	Kumu::hex2bin (_asset->atmos_id().c_str(), _state->desc.AtmosID, ASDCP::UUIDlen, &c);
 	DCP_ASSERT (c == ASDCP::UUIDlen);
 
-	_state->desc.AtmosVersion = 0;
+	_state->desc.AtmosVersion = _asset->atmos_version ();
 
 	_asset->fill_writer_info (&_state->writer_info, _asset->id());
 }
+
+
+void
+AtmosAssetWriter::write (shared_ptr<const AtmosFrame> frame)
+{
+	write (frame->data(), frame->size());
+}
+
 
 void
 AtmosAssetWriter::write (uint8_t const * data, int size)
@@ -76,8 +94,8 @@ AtmosAssetWriter::write (uint8_t const * data, int size)
 	DCP_ASSERT (!_finalized);
 
 	if (!_started) {
-		Kumu::Result_t r = _state->mxf_writer.OpenWrite (_file.string().c_str(), _state->writer_info, _state->desc);
-		if (ASDCP_FAILURE (r)) {
+		auto r = _state->mxf_writer.OpenWrite (_file.string().c_str(), _state->writer_info, _state->desc);
+		if (ASDCP_FAILURE(r)) {
 			boost::throw_exception (FileError ("could not open atmos MXF for writing", _file.string(), r));
 		}
 
@@ -89,19 +107,20 @@ AtmosAssetWriter::write (uint8_t const * data, int size)
 	_state->frame_buffer.Size (size);
 	memcpy (_state->frame_buffer.Data(), data, size);
 
-	ASDCP::Result_t const r = _state->mxf_writer.WriteFrame (_state->frame_buffer, _crypto_context->context(), _crypto_context->hmac());
-	if (ASDCP_FAILURE (r)) {
-		boost::throw_exception (MiscError (String::compose ("could not write atmos MXF frame (%1)", int (r))));
+	auto const r = _state->mxf_writer.WriteFrame (_state->frame_buffer, _crypto_context->context(), _crypto_context->hmac());
+	if (ASDCP_FAILURE(r)) {
+		boost::throw_exception (MiscError(String::compose("could not write atmos MXF frame (%1)", static_cast<int>(r))));
 	}
 
 	++_frames_written;
 }
 
+
 bool
 AtmosAssetWriter::finalize ()
 {
-	if (_started && ASDCP_FAILURE (_state->mxf_writer.Finalize())) {
-		boost::throw_exception (MiscError ("could not finalise atmos MXF"));
+	if (_started && ASDCP_FAILURE(_state->mxf_writer.Finalize())) {
+		boost::throw_exception (MiscError("could not finalise atmos MXF"));
 	}
 
 	_asset->_intrinsic_duration = _frames_written;

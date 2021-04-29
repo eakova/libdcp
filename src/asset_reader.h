@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2016 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2016-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,49 +31,79 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/asset_reader.h
+ *  @brief AssetReader class
+ */
+
+
 #ifndef LIBDCP_ASSET_READER_H
 #define LIBDCP_ASSET_READER_H
 
-#include "dcp_assert.h"
+
 #include "asset.h"
 #include "crypto_context.h"
+#include "dcp_assert.h"
 #include <asdcp/AS_DCP.h>
-#include <boost/noncopyable.hpp>
-#include <boost/shared_ptr.hpp>
+#include <memory>
+
 
 namespace dcp {
 
+
+class AtmosAsset;
+class MonoPictureAsset;
+class SoundAsset;
+class StereoPictureAsset;
+
+
 template <class R, class F>
-class AssetReader : public boost::noncopyable
+class AssetReader
 {
 public:
-	explicit AssetReader (Asset const * asset, boost::optional<Key> key, Standard standard)
-		: _crypto_context (new DecryptionContext (key, standard))
-	{
-		_reader = new R ();
-		DCP_ASSERT (asset->file ());
-		Kumu::Result_t const r = _reader->OpenRead (asset->file()->string().c_str());
-		if (ASDCP_FAILURE (r)) {
-			delete _reader;
-			boost::throw_exception (FileError ("could not open MXF file for reading", asset->file().get(), r));
-		}
-	}
+	AssetReader (AssetReader const&) = delete;
+	AssetReader& operator== (AssetReader const&) = delete;
 
 	~AssetReader ()
 	{
 		delete _reader;
 	}
 
-	boost::shared_ptr<const F> get_frame (int n) const
+	std::shared_ptr<const F> get_frame (int n) const
 	{
-		return boost::shared_ptr<const F> (new F (_reader, n, _crypto_context));
+		/* Can't use make_shared here as the constructor is private */
+		return std::shared_ptr<const F> (new F(_reader, n, _crypto_context));
+	}
+
+	R* reader () const {
+		return _reader;
 	}
 
 protected:
-	R* _reader;
-	boost::shared_ptr<DecryptionContext> _crypto_context;
+	R* _reader = nullptr;
+	std::shared_ptr<DecryptionContext> _crypto_context;
+
+private:
+	friend class AtmosAsset;
+	friend class MonoPictureAsset;
+	friend class SoundAsset;
+	friend class StereoPictureAsset;
+
+	explicit AssetReader (Asset const * asset, boost::optional<Key> key, Standard standard)
+		: _crypto_context (new DecryptionContext(key, standard))
+	{
+		_reader = new R ();
+		DCP_ASSERT (asset->file());
+		auto const r = _reader->OpenRead (asset->file()->string().c_str());
+		if (ASDCP_FAILURE(r)) {
+			delete _reader;
+			boost::throw_exception (FileError("could not open MXF file for reading", asset->file().get(), r));
+		}
+	}
 };
 
+
 }
+
 
 #endif

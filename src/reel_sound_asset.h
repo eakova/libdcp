@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2014-2019 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2014-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,43 +31,46 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/reel_sound_asset.h
- *  @brief ReelSoundAsset class.
+ *  @brief ReelSoundAsset class
  */
 
-#include "reel_mxf.h"
-#include "reel_asset.h"
+
+#include "reel_file_asset.h"
 #include "sound_asset.h"
-#include <boost/shared_ptr.hpp>
+#include <memory>
 #include <string>
+
 
 namespace dcp {
 
+
 /** @class ReelSoundAsset
- *  @brief Part of a Reel's description which refers to a sound asset.
+ *  @brief Part of a Reel's description which refers to a sound asset
  */
-class ReelSoundAsset : public ReelAsset, public ReelMXF
+class ReelSoundAsset : public ReelFileAsset
 {
 public:
-	ReelSoundAsset (boost::shared_ptr<dcp::SoundAsset> content, int64_t entry_point);
-	explicit ReelSoundAsset (boost::shared_ptr<const cxml::Node>);
-
-	xmlpp::Node* write_to_cpl (xmlpp::Node* node, Standard standard) const;
-	bool equals (boost::shared_ptr<const ReelSoundAsset>, EqualityOptions, NoteHandler) const;
+	ReelSoundAsset (std::shared_ptr<dcp::SoundAsset> content, int64_t entry_point);
+	explicit ReelSoundAsset (std::shared_ptr<const cxml::Node>);
 
 	/** @return the SoundAsset that this object refers to */
-	boost::shared_ptr<SoundAsset> asset () {
-		return asset_of_type<SoundAsset> ();
+	std::shared_ptr<const SoundAsset> asset () const {
+		return asset_of_type<const SoundAsset>();
 	}
 
 	/** @return the SoundAsset that this object refers to */
-	boost::shared_ptr<const SoundAsset> asset () const {
-		return asset_of_type<const SoundAsset> ();
+	std::shared_ptr<SoundAsset> asset () {
+		return asset_of_type<SoundAsset>();
 	}
+
+	bool equals (std::shared_ptr<const ReelSoundAsset>, EqualityOptions, NoteHandler) const;
 
 private:
-	std::string key_type () const;
-	std::string cpl_node_name (Standard standard) const;
+	boost::optional<std::string> key_type () const override;
+	std::string cpl_node_name (Standard standard) const override;
 };
+
 
 }

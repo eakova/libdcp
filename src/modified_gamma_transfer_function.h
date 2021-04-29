@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2014 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,13 +31,17 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/modified_gamma_transfer_function.h
- *  @brief ModifiedGammaTransferFunction class.
+ *  @brief ModifiedGammaTransferFunction class
  */
+
 
 #include "transfer_function.h"
 
+
 namespace dcp {
+
 
 /** A transfer function which for an input x gives a linear output y where
  *
@@ -70,10 +74,10 @@ public:
 		return _B;
 	}
 
-	bool about_equal (boost::shared_ptr<const TransferFunction>, double epsilon) const;
+	bool about_equal (std::shared_ptr<const TransferFunction>, double epsilon) const override;
 
 protected:
-	double * make_lut (int bit_depth, bool inverse) const;
+	double * make_lut (int bit_depth, bool inverse) const override;
 
 private:
 	double _power;
@@ -81,5 +85,6 @@ private:
 	double _A;
 	double _B;
 };
+
 
 }

@@ -35,7 +35,6 @@
 #include "decrypted_kdm.h"
 #include "util.h"
 #include "exceptions.h"
-#include <boost/foreach.hpp>
 #include <getopt.h>
 
 using std::string;
@@ -53,6 +52,8 @@ help (string n)
 int
 main (int argc, char* argv[])
 {
+	dcp::init ();
+
 	int option_index = 0;
 	while (true) {
 		struct option long_options[] = {

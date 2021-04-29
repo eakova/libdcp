@@ -33,42 +33,32 @@
 
 #include "mono_picture_asset_writer.h"
 #include "mono_picture_asset.h"
+#include "test.h"
 #include <asdcp/KM_util.h>
 #include <boost/test/unit_test.hpp>
 #include <boost/filesystem.hpp>
 
 using std::string;
-using boost::shared_ptr;
+using std::shared_ptr;
+using std::make_shared;
 
 /** Check that recovery from a partially-written MXF works */
 BOOST_AUTO_TEST_CASE (recovery)
 {
-	Kumu::cth_test = true;
+	RNGFixer fix;
 
-	string const picture = "test/data/32x32_red_square.j2c";
-	int const size = boost::filesystem::file_size (picture);
-	uint8_t* data = new uint8_t[size];
-	{
-		FILE* f = fopen (picture.c_str(), "rb");
-		BOOST_CHECK (f);
-		fread (data, 1, size, f);
-		fclose (f);
-	}
-
-#ifdef LIBDCP_POSIX
-	/* XXX: fix this posix-only stuff */
-	Kumu::ResetTestRNG ();
-#endif
+	string const picture = "test/data/flat_red.j2c";
+	dcp::ArrayData data(picture);
 
 	boost::filesystem::remove_all ("build/test/baz");
 	boost::filesystem::create_directories ("build/test/baz");
-	shared_ptr<dcp::MonoPictureAsset> mp (new dcp::MonoPictureAsset (dcp::Fraction (24, 1), dcp::SMPTE));
-	shared_ptr<dcp::PictureAssetWriter> writer = mp->start_write ("build/test/baz/video1.mxf", false);
+	auto mp = make_shared<dcp::MonoPictureAsset>(dcp::Fraction (24, 1), dcp::Standard::SMPTE);
+	auto writer = mp->start_write ("build/test/baz/video1.mxf", false);
 
 	int written_size = 0;
 	for (int i = 0; i < 24; ++i) {
-		dcp::FrameInfo info = writer->write (data, size);
-		BOOST_CHECK_EQUAL (info.hash, "cb90485a97ea5f7555cedc8a7afd473b");
+		auto info = writer->write (data.data(), data.size());
+		BOOST_CHECK_EQUAL (info.hash, "c3c9a3adec09baf2b0bcb65806fbeac8");
 		written_size = info.size;
 	}
 
@@ -76,10 +66,10 @@ BOOST_AUTO_TEST_CASE (recovery)
 	writer.reset ();
 
 	boost::filesystem::copy_file ("build/test/baz/video1.mxf", "build/test/baz/video2.mxf");
-	boost::filesystem::resize_file ("build/test/baz/video2.mxf", 16384 + 353 * 11);
+	boost::filesystem::resize_file ("build/test/baz/video2.mxf", 16384 + data.size() * 11);
 
 	{
-		FILE* f = fopen ("build/test/baz/video2.mxf", "rb+");
+		auto f = fopen ("build/test/baz/video2.mxf", "rb+");
 		rewind (f);
 		char zeros[256];
 		memset (zeros, 0, 256);
@@ -87,22 +77,24 @@ BOOST_AUTO_TEST_CASE (recovery)
 		fclose (f);
 	}
 
-#ifdef LIBDCP_POSIX
+#ifndef LIBDCP_WINDOWS
 	Kumu::ResetTestRNG ();
 #endif
 
-	mp.reset (new dcp::MonoPictureAsset (dcp::Fraction (24, 1), dcp::SMPTE));
+	mp = make_shared<dcp::MonoPictureAsset>(dcp::Fraction (24, 1), dcp::Standard::SMPTE);
 	writer = mp->start_write ("build/test/baz/video2.mxf", true);
 
-	writer->write (data, size);
+	writer->write (data.data(), data.size());
 
 	for (int i = 1; i < 4; ++i) {
 		writer->fake_write (written_size);
 	}
 
 	for (int i = 4; i < 24; ++i) {
-		writer->write (data, size);
+		writer->write (data.data(), data.size());
 	}
 
 	writer->finalize ();
+
+	check_file ("build/test/baz/video1.mxf", "build/test/baz/video2.mxf");
 }

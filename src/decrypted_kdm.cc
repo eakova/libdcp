@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2013-2017 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2013-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,23 +31,29 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/decrypted_kdm.cc
+ *  @brief DecryptedKDM class
+ */
+
+
+#include "certificate_chain.h"
+#include "compose.hpp"
+#include "cpl.h"
+#include "dcp_assert.h"
 #include "decrypted_kdm.h"
 #include "decrypted_kdm_key.h"
 #include "encrypted_kdm.h"
-#include "reel_mxf.h"
-#include "reel_asset.h"
-#include "util.h"
 #include "exceptions.h"
-#include "cpl.h"
-#include "certificate_chain.h"
-#include "dcp_assert.h"
-#include "compose.hpp"
+#include "reel_asset.h"
+#include "reel_file_asset.h"
+#include "util.h"
 #include <asdcp/AS_DCP.h>
 #include <asdcp/KM_util.h>
 #include <openssl/rsa.h>
 #include <openssl/pem.h>
 #include <openssl/err.h>
-#include <boost/foreach.hpp>
+
 
 using std::list;
 using std::vector;
@@ -57,12 +63,14 @@ using std::setfill;
 using std::hex;
 using std::pair;
 using std::map;
-using boost::shared_ptr;
+using std::shared_ptr;
 using boost::optional;
 using namespace dcp;
 
+
 /* Magic value specified by SMPTE S430-1-2006 */
 static uint8_t smpte_structure_id[] = { 0xf1, 0xdc, 0x12, 0x44, 0x60, 0x16, 0x9a, 0x0e, 0x85, 0xbc, 0x30, 0x06, 0x42, 0xf8, 0x66, 0xab };
+
 
 static void
 put (uint8_t ** d, string s)
@@ -71,12 +79,14 @@ put (uint8_t ** d, string s)
         (*d) += s.length();
 }
 
+
 static void
 put (uint8_t ** d, uint8_t const * s, int N)
 {
         memcpy (*d, s, N);
         (*d) += N;
 }
+
 
 void
 DecryptedKDM::put_uuid (uint8_t ** d, string id)
@@ -97,6 +107,7 @@ DecryptedKDM::put_uuid (uint8_t ** d, string id)
 	*d += 16;
 }
 
+
 string
 DecryptedKDM::get_uuid (unsigned char ** p)
 {
@@ -115,6 +126,7 @@ DecryptedKDM::get_uuid (unsigned char ** p)
 	return buffer;
 }
 
+
 static string
 get (uint8_t ** p, int N)
 {
@@ -127,29 +139,30 @@ get (uint8_t ** p, int N)
 	return g;
 }
 
+
 DecryptedKDM::DecryptedKDM (EncryptedKDM const & kdm, string private_key)
 {
 	/* Read the private key */
 
-	BIO* bio = BIO_new_mem_buf (const_cast<char *> (private_key.c_str ()), -1);
+	auto bio = BIO_new_mem_buf (const_cast<char *>(private_key.c_str()), -1);
 	if (!bio) {
 		throw MiscError ("could not create memory BIO");
 	}
 
-	RSA* rsa = PEM_read_bio_RSAPrivateKey (bio, 0, 0, 0);
+	auto rsa = PEM_read_bio_RSAPrivateKey (bio, 0, 0, 0);
 	if (!rsa) {
 		throw FileError ("could not read RSA private key file", private_key, errno);
 	}
 
 	/* Use the private key to decrypt the keys */
 
-	BOOST_FOREACH (string const & i, kdm.keys ()) {
+	for (auto const& i: kdm.keys()) {
 		/* Decode the base-64-encoded cipher value from the KDM */
 		unsigned char cipher_value[256];
 		int const cipher_value_len = base64_decode (i, cipher_value, sizeof (cipher_value));
 
 		/* Decrypt it */
-		unsigned char * decrypted = new unsigned char[RSA_size(rsa)];
+		auto decrypted = new unsigned char[RSA_size(rsa)];
 		int const decrypted_len = RSA_private_decrypt (cipher_value_len, cipher_value, decrypted, rsa, RSA_PKCS1_OAEP_PADDING);
 		if (decrypted_len == -1) {
 			delete[] decrypted;
@@ -178,7 +191,7 @@ DecryptedKDM::DecryptedKDM (EncryptedKDM const & kdm, string private_key)
 			/* 93 is not-valid-after (a string) [25 bytes] */
 			p += 25;
 			/* 118 is the key [ASDCP::KeyLen bytes] */
-			add_key (optional<string>(), key_id, Key (p), cpl_id, INTEROP);
+			add_key (optional<string>(), key_id, Key(p), cpl_id, Standard::INTEROP);
 			break;
 		}
 		case 138:
@@ -200,7 +213,7 @@ DecryptedKDM::DecryptedKDM (EncryptedKDM const & kdm, string private_key)
 			/* 97 is not-valid-after (a string) [25 bytes] */
 			p += 25;
 			/* 112 is the key [ASDCP::KeyLen bytes] */
-			add_key (key_type, key_id, Key (p), cpl_id, SMPTE);
+			add_key (key_type, key_id, Key(p), cpl_id, Standard::SMPTE);
 			break;
 		}
 		default:
@@ -218,6 +231,7 @@ DecryptedKDM::DecryptedKDM (EncryptedKDM const & kdm, string private_key)
 	_issue_date = kdm.issue_date ();
 }
 
+
 DecryptedKDM::DecryptedKDM (
 	LocalTime not_valid_before,
 	LocalTime not_valid_after,
@@ -233,10 +247,11 @@ DecryptedKDM::DecryptedKDM (
 {
 
 }
+
 
 DecryptedKDM::DecryptedKDM (
 	string cpl_id,
-	map<shared_ptr<const ReelMXF>, Key> keys,
+	map<shared_ptr<const ReelFileAsset>, Key> keys,
 	LocalTime not_valid_before,
 	LocalTime not_valid_after,
 	string annotation_text,
@@ -249,10 +264,11 @@ DecryptedKDM::DecryptedKDM (
 	, _content_title_text (content_title_text)
 	, _issue_date (issue_date)
 {
-	for (map<shared_ptr<const ReelMXF>, Key>::const_iterator i = keys.begin(); i != keys.end(); ++i) {
-		add_key (i->first->key_type(), i->first->key_id().get(), i->second, cpl_id, SMPTE);
+	for (map<shared_ptr<const ReelFileAsset>, Key>::const_iterator i = keys.begin(); i != keys.end(); ++i) {
+		add_key (i->first->key_type(), i->first->key_id().get(), i->second, cpl_id, Standard::SMPTE);
 	}
 }
+
 
 DecryptedKDM::DecryptedKDM (
 	shared_ptr<const CPL> cpl,
@@ -271,9 +287,9 @@ DecryptedKDM::DecryptedKDM (
 {
 	/* Create DecryptedKDMKey objects for each encryptable asset */
 	bool did_one = false;
-	BOOST_FOREACH(shared_ptr<const ReelMXF> i, cpl->reel_mxfs()) {
-		if (i->key_id()) {
-			add_key (i->key_type(), i->key_id().get(), key, cpl->id(), SMPTE);
+	for (auto i: cpl->reel_file_assets()) {
+		if (i->encryptable()) {
+			add_key (i->key_type().get(), i->key_id().get(), key, cpl->id(), Standard::SMPTE);
 			did_one = true;
 		}
 	}
@@ -283,22 +299,20 @@ DecryptedKDM::DecryptedKDM (
 	}
 }
 
-/** @param type (MDIK, MDAK etc.)
- *  @param key_id Key ID.
- *  @param key The actual symmetric key.
- *  @param cpl_id ID of CPL that the key is for.
- */
+
 void
 DecryptedKDM::add_key (optional<string> type, string key_id, Key key, string cpl_id, Standard standard)
 {
 	_keys.push_back (DecryptedKDMKey (type, key_id, key, cpl_id, standard));
 }
 
+
 void
 DecryptedKDM::add_key (DecryptedKDMKey key)
 {
 	_keys.push_back (key);
 }
+
 
 EncryptedKDM
 DecryptedKDM::encrypt (
@@ -312,9 +326,17 @@ DecryptedKDM::encrypt (
 {
 	DCP_ASSERT (!_keys.empty ());
 
-	list<pair<string, string> > key_ids;
-	list<string> keys;
-	BOOST_FOREACH (DecryptedKDMKey const & i, _keys) {
+	for (auto i: signer->leaf_to_root()) {
+		if (day_greater_than_or_equal(dcp::LocalTime(i.not_before()), _not_valid_before)) {
+			throw BadKDMDateError (true);
+		} else if (day_less_than_or_equal(dcp::LocalTime(i.not_after()), _not_valid_after)) {
+			throw BadKDMDateError (false);
+		}
+	}
+
+	vector<pair<string, string>> key_ids;
+	vector<string> keys;
+	for (auto const& i: _keys) {
 		/* We're making SMPTE keys so we must have a type for each one */
 		DCP_ASSERT (i.type());
 		key_ids.push_back (make_pair (i.type().get(), i.id ()));

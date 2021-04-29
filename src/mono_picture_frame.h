@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2014 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,21 +31,24 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/mono_picture_frame.h
+ *  @brief MonoPictureFrame class
+ */
+
+
 #ifndef LIBDCP_MONO_PICTURE_FRAME_H
 #define LIBDCP_MONO_PICTURE_FRAME_H
 
-/** @file  src/mono_picture_frame.h
- *  @brief MonoPictureFrame class.
- */
 
-#include "types.h"
 #include "asset_reader.h"
-#include <boost/shared_ptr.hpp>
-#include <boost/noncopyable.hpp>
+#include "types.h"
 #include <boost/filesystem.hpp>
 #include <boost/optional.hpp>
-#include <string>
+#include <memory>
 #include <stdint.h>
+#include <string>
+
 
 namespace ASDCP {
 	namespace JP2K {
@@ -55,25 +58,42 @@ namespace ASDCP {
 	class AESDecContext;
 }
 
+
 namespace dcp {
+
 
 class OpenJPEGImage;
 
+
 /** @class MonoPictureFrame
- *  @brief A single frame of a 2D (monoscopic) picture asset.
+ *  @brief A single frame of a 2D (monoscopic) picture asset
  */
-class MonoPictureFrame : public boost::noncopyable
+class MonoPictureFrame : public Data
 {
 public:
+	/** Make a picture frame from a JPEG2000 file.
+	 *  @param path Path to JPEG2000 file.
+	 */
 	explicit MonoPictureFrame (boost::filesystem::path path);
 	MonoPictureFrame (uint8_t const * data, int size);
-	~MonoPictureFrame ();
 
-	boost::shared_ptr<OpenJPEGImage> xyz_image (int reduce = 0) const;
+	MonoPictureFrame (MonoPictureFrame const&) = delete;
+	MonoPictureFrame& operator= (MonoPictureFrame const&) = delete;
 
-	uint8_t const * j2k_data () const;
-	uint8_t* j2k_data ();
-	int j2k_size () const;
+	/** @param reduce a factor by which to reduce the resolution
+	 *  of the image, expressed as a power of two (pass 0 for no
+	 *  reduction).
+	 */
+	std::shared_ptr<OpenJPEGImage> xyz_image (int reduce = 0) const;
+
+	/** @return Pointer to JPEG2000 data */
+	uint8_t const * data () const override;
+
+	/** @return Pointer to JPEG2000 data */
+	uint8_t* data () override;
+
+	/** @return Size of JPEG2000 data in bytes */
+	int size () const override;
 
 private:
 	/* XXX: this is a bit of a shame, but I tried friend MonoPictureAssetReader and it's
@@ -81,9 +101,9 @@ private:
 	*/
 	friend class AssetReader<ASDCP::JP2K::MXFReader, MonoPictureFrame>;
 
-	MonoPictureFrame (ASDCP::JP2K::MXFReader* reader, int n, boost::shared_ptr<DecryptionContext>);
+	MonoPictureFrame (ASDCP::JP2K::MXFReader* reader, int n, std::shared_ptr<DecryptionContext>);
 
-	ASDCP::JP2K::FrameBuffer* _buffer;
+	std::shared_ptr<ASDCP::JP2K::FrameBuffer> _buffer;
 };
 
 }

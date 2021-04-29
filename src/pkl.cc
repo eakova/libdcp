@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2018 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2018-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,32 +31,45 @@
     files in the program, then also delete it here.
 */
 
-#include "pkl.h"
-#include "exceptions.h"
-#include "util.h"
-#include "raw_convert.h"
+
+/** @file  src/pkl.cc
+ *  @brief PKL class
+ */
+
+
 #include "dcp_assert.h"
+#include "exceptions.h"
+#include "pkl.h"
+#include "raw_convert.h"
+#include "util.h"
+#include "warnings.h"
+LIBDCP_DISABLE_WARNINGS
 #include <libxml++/libxml++.h>
-#include <boost/foreach.hpp>
+LIBDCP_ENABLE_WARNINGS
 #include <iostream>
 
+
 using std::string;
-using boost::shared_ptr;
+using std::shared_ptr;
+using std::make_shared;
 using boost::optional;
 using namespace dcp;
+
 
 static string const pkl_interop_ns = "http://www.digicine.com/PROTO-ASDCP-PKL-20040311#";
 static string const pkl_smpte_ns   = "http://www.smpte-ra.org/schemas/429-8/2007/PKL";
 
+
 PKL::PKL (boost::filesystem::path file)
+	: _file (file)
 {
 	cxml::Document pkl ("PackingList");
 	pkl.read_file (file);
 
 	if (pkl.namespace_uri() == pkl_interop_ns) {
-		_standard = INTEROP;
+		_standard = Standard::INTEROP;
 	} else if (pkl.namespace_uri() == pkl_smpte_ns) {
-		_standard = SMPTE;
+		_standard = Standard::SMPTE;
 	} else {
 		boost::throw_exception (XMLError ("Unrecognised packing list namesapce " + pkl.namespace_uri()));
 	}
@@ -67,23 +80,25 @@ PKL::PKL (boost::filesystem::path file)
 	_issuer = pkl.string_child ("Issuer");
 	_creator = pkl.string_child ("Creator");
 
-	BOOST_FOREACH (cxml::ConstNodePtr i, pkl.node_child("AssetList")->node_children("Asset")) {
-		_asset_list.push_back (shared_ptr<Asset> (new Asset (i)));
+	for (auto i: pkl.node_child("AssetList")->node_children("Asset")) {
+		_asset_list.push_back (make_shared<Asset>(i));
 	}
 }
+
 
 void
 PKL::add_asset (std::string id, boost::optional<std::string> annotation_text, std::string hash, int64_t size, std::string type)
 {
-	_asset_list.push_back (shared_ptr<Asset> (new Asset (id, annotation_text, hash, size, type)));
+	_asset_list.push_back (make_shared<Asset>(id, annotation_text, hash, size, type));
 }
+
 
 void
 PKL::write (boost::filesystem::path file, shared_ptr<const CertificateChain> signer) const
 {
 	xmlpp::Document doc;
 	xmlpp::Element* pkl;
-	if (_standard == INTEROP) {
+	if (_standard == Standard::INTEROP) {
 		pkl = doc.create_root_node("PackingList", pkl_interop_ns);
 	} else {
 		pkl = doc.create_root_node("PackingList", pkl_smpte_ns);
@@ -97,16 +112,16 @@ PKL::write (boost::filesystem::path file, shared_ptr<const CertificateChain> sig
 	pkl->add_child("Issuer")->add_child_text (_issuer);
 	pkl->add_child("Creator")->add_child_text (_creator);
 
-	xmlpp::Element* asset_list = pkl->add_child("AssetList");
-	BOOST_FOREACH (shared_ptr<Asset> i, _asset_list) {
-		xmlpp::Element* asset = asset_list->add_child("Asset");
+	auto asset_list = pkl->add_child("AssetList");
+	for (auto i: _asset_list) {
+		auto asset = asset_list->add_child("Asset");
 		asset->add_child("Id")->add_child_text ("urn:uuid:" + i->id());
-		if (i->annotation_text) {
-			asset->add_child("AnnotationText")->add_child_text (*i->annotation_text);
+		if (i->annotation_text()) {
+			asset->add_child("AnnotationText")->add_child_text (*i->annotation_text());
 		}
-		asset->add_child("Hash")->add_child_text (i->hash);
-		asset->add_child("Size")->add_child_text (raw_convert<string> (i->size));
-		asset->add_child("Type")->add_child_text (i->type);
+		asset->add_child("Hash")->add_child_text (i->hash());
+		asset->add_child("Size")->add_child_text (raw_convert<string>(i->size()));
+		asset->add_child("Type")->add_child_text (i->type());
 	}
 
 	indent (pkl, 0);
@@ -116,28 +131,31 @@ PKL::write (boost::filesystem::path file, shared_ptr<const CertificateChain> sig
 	}
 
 	doc.write_to_file_formatted (file.string(), "UTF-8");
+	_file = file;
 }
+
 
 optional<string>
 PKL::hash (string id) const
 {
-	BOOST_FOREACH (shared_ptr<Asset> i, _asset_list) {
+	for (auto i: _asset_list) {
 		if (i->id() == id) {
-			return i->hash;
+			return i->hash();
 		}
 	}
 
-	return optional<string>();
+	return {};
 }
+
 
 optional<string>
 PKL::type (string id) const
 {
-	BOOST_FOREACH (shared_ptr<Asset> i, _asset_list) {
+	for (auto i: _asset_list) {
 		if (i->id() == id) {
-			return i->type;
+			return i->type();
 		}
 	}
 
-	return optional<string>();
+	return {};
 }

@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2014 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,16 +31,20 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/picture_asset.h
+ *  @brief PictureAsset class
+ */
+
+
 #ifndef LIBDCP_PICTURE_ASSET_H
 #define LIBDCP_PICTURE_ASSET_H
 
-/** @file  src/picture_asset.h
- *  @brief PictureAsset class.
- */
 
 #include "mxf.h"
 #include "util.h"
 #include "metadata.h"
+
 
 namespace ASDCP {
 	namespace JP2K {
@@ -48,23 +52,28 @@ namespace ASDCP {
 	}
 }
 
-namespace dcp
-{
+
+namespace dcp {
+
 
 class MonoPictureFrame;
 class StereoPictureFrame;
 class PictureAssetWriter;
 
+
 /** @class PictureAsset
- *  @brief An asset made up of JPEG2000 data.
+ *  @brief An asset made up of JPEG2000 data
  */
 class PictureAsset : public Asset, public MXF
 {
 public:
+	/** Load a PictureAsset from a file */
 	explicit PictureAsset (boost::filesystem::path file);
+
+	/** Create a new PictureAsset with a given edit rate and standard */
 	explicit PictureAsset (Fraction edit_rate, Standard standard);
 
-	virtual boost::shared_ptr<PictureAssetWriter> start_write (
+	virtual std::shared_ptr<PictureAssetWriter> start_write (
 		boost::filesystem::path file,
 		bool overwrite
 		) = 0;
@@ -124,17 +133,18 @@ protected:
 	/** The total length of this content in video frames.  The amount of
 	 *  content presented may be less than this.
 	 */
-	int64_t _intrinsic_duration;
+	int64_t _intrinsic_duration = 0;
 	/** picture size in pixels */
 	Size _size;
 	Fraction _frame_rate;
 	Fraction _screen_aspect_ratio;
 
 private:
-	std::string pkl_type (Standard standard) const;
+	std::string pkl_type (Standard standard) const override;
 };
 
 
 }
+
 
 #endif

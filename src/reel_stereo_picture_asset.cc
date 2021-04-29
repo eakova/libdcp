@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2014-2019 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2014-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,31 +31,37 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/reel_stereo_picture_asset.cc
- *  @brief ReelStereoPictureAsset class.
+ *  @brief ReelStereoPictureAsset class
  */
+
 
 #include "reel_stereo_picture_asset.h"
 #include "stereo_picture_asset.h"
 #include <libcxml/cxml.h>
 
+
 using std::string;
 using std::pair;
 using std::make_pair;
-using boost::shared_ptr;
+using std::shared_ptr;
 using namespace dcp;
 
-ReelStereoPictureAsset::ReelStereoPictureAsset (boost::shared_ptr<StereoPictureAsset> mxf, int64_t entry_point)
+
+ReelStereoPictureAsset::ReelStereoPictureAsset (std::shared_ptr<StereoPictureAsset> mxf, int64_t entry_point)
 	: ReelPictureAsset (mxf, entry_point)
 {
 
 }
 
-ReelStereoPictureAsset::ReelStereoPictureAsset (boost::shared_ptr<const cxml::Node> node)
+
+ReelStereoPictureAsset::ReelStereoPictureAsset (std::shared_ptr<const cxml::Node> node)
 	: ReelPictureAsset (node)
 {
 	node->done ();
 }
+
 
 string
 ReelStereoPictureAsset::cpl_node_name (Standard) const
@@ -63,14 +69,15 @@ ReelStereoPictureAsset::cpl_node_name (Standard) const
 	return "msp-cpl:MainStereoscopicPicture";
 }
 
+
 pair<string, string>
 ReelStereoPictureAsset::cpl_node_attribute (Standard standard) const
 {
 	switch (standard) {
-	case INTEROP:
-		return make_pair ("xmlns:msp-cpl", "http://www.digicine.com/schemas/437-Y/2007/Main-Stereo-Picture-CPL");
-	case SMPTE:
-		return make_pair ("xmlns:msp-cpl", "http://www.smpte-ra.org/schemas/429-10/2008/Main-Stereo-Picture-CPL");
+	case Standard::INTEROP:
+		return { "xmlns:msp-cpl", "http://www.digicine.com/schemas/437-Y/2007/Main-Stereo-Picture-CPL" };
+	case Standard::SMPTE:
+		return { "xmlns:msp-cpl", "http://www.smpte-ra.org/schemas/429-10/2008/Main-Stereo-Picture-CPL" };
 	}
 
 	DCP_ASSERT (false);

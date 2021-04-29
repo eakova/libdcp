@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2016-2017 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2016-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,35 +31,42 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/reel_atmos_asset.cc
- *  @brief ReelAtmosAsset class.
+ *  @brief ReelAtmosAsset class
  */
+
 
 #include "atmos_asset.h"
 #include "reel_atmos_asset.h"
+#include "warnings.h"
 #include <libcxml/cxml.h>
+LIBDCP_DISABLE_WARNINGS
 #include <libxml++/libxml++.h>
+LIBDCP_ENABLE_WARNINGS
+
 
 using std::string;
 using std::pair;
 using std::make_pair;
-using boost::shared_ptr;
+using std::shared_ptr;
 using namespace dcp;
 
-ReelAtmosAsset::ReelAtmosAsset (boost::shared_ptr<AtmosAsset> asset, int64_t entry_point)
-	: ReelAsset (asset->id(), asset->edit_rate(), asset->intrinsic_duration(), entry_point)
-	, ReelMXF (asset, asset->key_id())
+
+ReelAtmosAsset::ReelAtmosAsset (std::shared_ptr<AtmosAsset> asset, int64_t entry_point)
+	: ReelFileAsset (asset, asset->key_id(), asset->id(), asset->edit_rate(), asset->intrinsic_duration(), entry_point)
 {
 
 }
 
-ReelAtmosAsset::ReelAtmosAsset (boost::shared_ptr<const cxml::Node> node)
-	: ReelAsset (node)
-	, ReelMXF (node)
+
+ReelAtmosAsset::ReelAtmosAsset (std::shared_ptr<const cxml::Node> node)
+	: ReelFileAsset (node)
 {
 	node->ignore_child ("DataType");
 	node->done ();
 }
+
 
 string
 ReelAtmosAsset::cpl_node_name (Standard) const
@@ -67,25 +74,22 @@ ReelAtmosAsset::cpl_node_name (Standard) const
 	return "axd:AuxData";
 }
 
+
 pair<string, string>
-ReelAtmosAsset::cpl_node_namespace (Standard) const
+ReelAtmosAsset::cpl_node_namespace () const
 {
-	return make_pair ("http://www.dolby.com/schemas/2012/AD", "axd");
+	return { "http://www.dolby.com/schemas/2012/AD", "axd" };
 }
 
-string
-ReelAtmosAsset::key_type () const
-{
-	return "MDEK";
-}
 
 xmlpp::Node *
 ReelAtmosAsset::write_to_cpl (xmlpp::Node* node, Standard standard) const
 {
-	xmlpp::Node* asset = write_to_cpl_base (node, standard, hash());
+	auto asset = ReelFileAsset::write_to_cpl (node, standard);
 	asset->add_child("axd:DataType")->add_child_text("urn:smpte:ul:060e2b34.04010105.0e090604.00000000");
 	return asset;
 }
+
 
 bool
 ReelAtmosAsset::equals (shared_ptr<const ReelAtmosAsset> other, EqualityOptions opt, NoteHandler note) const
@@ -93,7 +97,8 @@ ReelAtmosAsset::equals (shared_ptr<const ReelAtmosAsset> other, EqualityOptions 
 	if (!asset_equals (other, opt, note)) {
 		return false;
 	}
-	if (!mxf_equals (other, opt, note)) {
+
+	if (!file_asset_equals (other, opt, note)) {
 		return false;
 	}
 

@@ -14,4 +14,7 @@ GSYMS
 GTAGS
 .*.swp
 TAGS
+.ccls-cache
+compile_commands.json
 
+run/tools/dcpdummy

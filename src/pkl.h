@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2018 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2018-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,8 +31,15 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/pkl.cc
+ *  @brief PKL class
+ */
+
+
 #ifndef LIBDCP_PKL_H
 #define LIBDCP_PKL_H
+
 
 #include "object.h"
 #include "types.h"
@@ -41,7 +48,9 @@
 #include <libcxml/cxml.h>
 #include <boost/filesystem.hpp>
 
+
 namespace dcp {
+
 
 class PKL : public Object
 {
@@ -60,47 +69,81 @@ public:
 		return _standard;
 	}
 
+	boost::optional<std::string> annotation_text () const {
+		return _annotation_text;
+	}
+
 	boost::optional<std::string> hash (std::string id) const;
 	boost::optional<std::string> type (std::string id) const;
 
 	void add_asset (std::string id, boost::optional<std::string> annotation_text, std::string hash, int64_t size, std::string type);
-	void write (boost::filesystem::path file, boost::shared_ptr<const CertificateChain> signer) const;
+	void write (boost::filesystem::path file, std::shared_ptr<const CertificateChain> signer) const;
 
-private:
+	/** @return the most recent disk file used to read or write this PKL, if there is one */
+	boost::optional<boost::filesystem::path> file () const {
+		return _file;
+	}
 
 	class Asset : public Object
 	{
 	public:
 		Asset (cxml::ConstNodePtr node)
 			: Object (remove_urn_uuid(node->string_child("Id")))
-			, annotation_text (node->optional_string_child("AnnotationText"))
-			, hash (node->string_child("Hash"))
-			, size (node->number_child<int64_t>("Size"))
-			, type (node->string_child("Type"))
+			, _annotation_text (node->optional_string_child("AnnotationText"))
+			, _hash (node->string_child("Hash"))
+			, _size (node->number_child<int64_t>("Size"))
+			, _type (node->string_child("Type"))
 		{}
 
-		Asset (std::string id_, boost::optional<std::string> annotation_text_, std::string hash_, int64_t size_, std::string type_)
-			: Object (id_)
-			, annotation_text (annotation_text_)
-			, hash (hash_)
-			, size (size_)
-			, type (type_)
+		Asset (std::string id, boost::optional<std::string> annotation_text, std::string hash, int64_t size, std::string type)
+			: Object (id)
+			, _annotation_text (annotation_text)
+			, _hash (hash)
+			, _size (size)
+			, _type (type)
 		{}
 
-		boost::optional<std::string> annotation_text;
-		std::string hash;
-		int64_t size;
-		std::string type;
+		boost::optional<std::string> annotation_text () const {
+			return _annotation_text;
+		}
+
+		std::string hash () const {
+			return _hash;
+		}
+
+		int64_t size () const {
+			return _size;
+		}
+
+		std::string type () const {
+			return _type;
+		}
+
+	private:
+		boost::optional<std::string> _annotation_text;
+		std::string _hash;
+		int64_t _size = 0;
+		std::string _type;
 	};
 
-	Standard _standard;
+	std::vector<std::shared_ptr<Asset>> asset_list () const {
+		return _asset_list;
+	}
+
+private:
+
+	Standard _standard = dcp::Standard::SMPTE;
 	boost::optional<std::string> _annotation_text;
 	std::string _issue_date;
 	std::string _issuer;
 	std::string _creator;
-	std::list<boost::shared_ptr<Asset> > _asset_list;
+	std::vector<std::shared_ptr<Asset>> _asset_list;
+	/** The most recent disk file used to read or write this PKL */
+	mutable boost::optional<boost::filesystem::path> _file;
 };
 
+
 }
+
 
 #endif

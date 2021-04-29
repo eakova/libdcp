@@ -33,12 +33,13 @@
 
 #include "mono_picture_asset.h"
 #include "mono_picture_asset_writer.h"
-#include "j2k.h"
+#include "j2k_transcode.h"
 #include "openjpeg_image.h"
 #include <boost/test/unit_test.hpp>
 
 using std::string;
-using boost::shared_ptr;
+using std::shared_ptr;
+using std::make_shared;
 
 static void
 check (unsigned int* seed, shared_ptr<dcp::PictureAssetWriter> writer, string hash)
@@ -50,22 +51,22 @@ check (unsigned int* seed, shared_ptr<dcp::PictureAssetWriter> writer, string ha
 		}
 	}
 
-	dcp::Data data = dcp::compress_j2k (xyz, 100000000, 24, false, false);
+	dcp::ArrayData data = dcp::compress_j2k (xyz, 100000000, 24, false, false);
 
-	dcp::FrameInfo info = writer->write (data.data().get(), data.size());
+	dcp::FrameInfo info = writer->write (data.data(), data.size());
 	BOOST_CHECK_EQUAL (info.hash, hash);
 }
 
 /** Test the hashing of data written to JPEG2000 MXFs with some random inputs */
 BOOST_AUTO_TEST_CASE (frame_info_hash_test)
 {
-	shared_ptr<dcp::MonoPictureAsset> mp (new dcp::MonoPictureAsset (dcp::Fraction (24, 1), dcp::SMPTE));
-	shared_ptr<dcp::PictureAssetWriter> writer = mp->start_write ("build/test/frame_info_hash_test.mxf", false);
+	auto mp = make_shared<dcp::MonoPictureAsset>(dcp::Fraction (24, 1), dcp::Standard::SMPTE);
+	auto writer = mp->start_write ("build/test/frame_info_hash_test.mxf", false);
 
 	unsigned int seed = 42;
 
 	/* Check a few random frames */
-	check (&seed, writer, "c039c5a0e5d20bc646f7e9c10e2d5874");
-	check (&seed, writer, "d9e694cfe84544c54a869c128ba39343");
-	check (&seed, writer, "fafb05a0039cb9fc604279c90a13cb87");
+	check (&seed, writer, "9da3d1d93a80683e65d996edae4101ed");
+	check (&seed, writer, "ecd77b3fbf459591f24119d4118783fb");
+	check (&seed, writer, "9f10303495b58ccb715c893d40127e22");
 }

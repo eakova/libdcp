@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2016-2017 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2016-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,43 +31,57 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/reel_atmos_asset.h
- *  @brief ReelAtmosAsset class.
+ *  @brief ReelAtmosAsset class
  */
+
 
 #ifndef LIBDCP_REEL_ATMOS_ASSET_H
 #define LIBDCP_REEL_ATMOS_ASSET_H
 
-#include "reel_asset.h"
+
+#include "reel_file_asset.h"
 #include "atmos_asset.h"
-#include "reel_mxf.h"
+
 
 namespace dcp {
 
+
 class AtmosAsset;
 
+
 /** @class ReelAtmosAsset
- *  @brief Part of a Reel's description which refers to a Atmos MXF.
+ *  @brief Part of a Reel's description which refers to a Atmos MXF
  */
-class ReelAtmosAsset : public ReelAsset, public ReelMXF
+class ReelAtmosAsset : public ReelFileAsset
 {
 public:
-	ReelAtmosAsset (boost::shared_ptr<AtmosAsset> asset, int64_t entry_point);
-	explicit ReelAtmosAsset (boost::shared_ptr<const cxml::Node>);
+	ReelAtmosAsset (std::shared_ptr<AtmosAsset> asset, int64_t entry_point);
+	explicit ReelAtmosAsset (std::shared_ptr<const cxml::Node>);
 
-	boost::shared_ptr<AtmosAsset> asset () const {
-		return asset_of_type<AtmosAsset> ();
+	std::shared_ptr<const AtmosAsset> asset () const {
+		return asset_of_type<const AtmosAsset>();
 	}
 
-	xmlpp::Node* write_to_cpl (xmlpp::Node* node, Standard standard) const;
-	bool equals (boost::shared_ptr<const ReelAtmosAsset>, EqualityOptions, NoteHandler) const;
+	std::shared_ptr<AtmosAsset> asset () {
+		return asset_of_type<AtmosAsset>();
+	}
+
+	xmlpp::Node* write_to_cpl (xmlpp::Node* node, Standard standard) const override;
+	bool equals (std::shared_ptr<const ReelAtmosAsset>, EqualityOptions, NoteHandler) const;
 
 private:
-	std::string key_type () const;
-	std::string cpl_node_name (Standard standard) const;
-	std::pair<std::string, std::string> cpl_node_namespace (Standard) const;
+	boost::optional<std::string> key_type () const override {
+		return std::string("MDEK");
+	}
+
+	std::string cpl_node_name (Standard standard) const override;
+	std::pair<std::string, std::string> cpl_node_namespace () const override;
 };
 
+
 }
+
 
 #endif

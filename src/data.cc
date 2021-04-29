@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2015 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2015-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,75 +31,36 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/data.cc
+ *  @brief Data class
+ */
+
+
 #include "data.h"
-#include "util.h"
 #include "exceptions.h"
+#include "util.h"
 #include <cstdio>
 #include <cerrno>
 
-using boost::shared_array;
+
 using namespace dcp;
 
-Data::Data ()
-	: _size (0)
-{
-
-}
-
-Data::Data (int size)
-	: _data (new uint8_t[size])
-	, _size (size)
-{
-
-}
-
-Data::Data (uint8_t const * data, int size)
-	: _data (new uint8_t[size])
-	, _size (size)
-{
-	memcpy (_data.get(), data, size);
-}
-
-Data::Data (shared_array<uint8_t> data, int size)
-	: _data (data)
-	, _size (size)
-{
-
-}
-
-Data::Data (boost::filesystem::path file)
-{
-	_size = boost::filesystem::file_size (file);
-	_data.reset (new uint8_t[_size]);
-
-	FILE* f = fopen_boost (file, "rb");
-	if (!f) {
-		throw FileError ("could not open file for reading", file, errno);
-	}
-
-	size_t const r = fread (_data.get(), 1, _size, f);
-	if (r != size_t (_size)) {
-		fclose (f);
-		throw FileError ("could not read from file", file, errno);
-	}
-
-	fclose (f);
-}
 
 void
 Data::write (boost::filesystem::path file) const
 {
-	FILE* f = fopen_boost (file, "wb");
+	auto f = fopen_boost (file, "wb");
 	if (!f) {
 		throw FileError ("could not write to file", file, errno);
 	}
-	size_t const r = fwrite (_data.get(), 1, _size, f);
-	if (r != size_t (_size)) {
-		fclose (f);
+	size_t const r = fwrite (data(), 1, size(), f);
+	fclose (f);
+	if (r != size_t(size())) {
 		throw FileError ("could not write to file", file, errno);
 	}
-	fclose (f);
 }
+
 
 void
 Data::write_via_temp (boost::filesystem::path temp, boost::filesystem::path final) const
@@ -108,8 +69,17 @@ Data::write_via_temp (boost::filesystem::path temp, boost::filesystem::path fina
 	boost::filesystem::rename (temp, final);
 }
 
+
 bool
 dcp::operator== (Data const & a, Data const & b)
 {
-	return (a.size() == b.size() && memcmp (a.data().get(), b.data().get(), a.size()) == 0);
+	return (a.size() == b.size() && memcmp(a.data(), b.data(), a.size()) == 0);
 }
+
+
+bool
+dcp::operator!= (Data const & a, Data const & b)
+{
+	return (a.size() != b.size() || memcmp(a.data(), b.data(), a.size()) != 0);
+}
+

@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2015 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,20 +31,29 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/subtitle_asset.h
+ *  @brief SubtitleAsset class
+ */
+
+
 #ifndef LIBDCP_SUBTITLE_ASSET_H
 #define LIBDCP_SUBTITLE_ASSET_H
 
+
+#include "array_data.h"
 #include "asset.h"
 #include "dcp_time.h"
 #include "subtitle_string.h"
-#include "data.h"
 #include <libcxml/cxml.h>
 #include <boost/shared_array.hpp>
 #include <map>
 
+
 namespace xmlpp {
 	class Element;
 }
+
 
 struct interop_dcp_font_test;
 struct smpte_dcp_font_test;
@@ -52,8 +61,9 @@ struct pull_fonts_test1;
 struct pull_fonts_test2;
 struct pull_fonts_test3;
 
-namespace dcp
-{
+
+namespace dcp {
+
 
 class SubtitleString;
 class SubtitleImage;
@@ -61,14 +71,17 @@ class FontNode;
 class TextNode;
 class SubtitleNode;
 class LoadFontNode;
+class ReelAsset;
+
 
 namespace order {
 	class Part;
 	struct Context;
 }
 
+
 /** @class SubtitleAsset
- *  @brief A parent for classes representing a file containing subtitles.
+ *  @brief A parent for classes representing a file containing subtitles
  *
  *  This class holds a list of Subtitle objects which it can extract
  *  from the appropriate part of either an Interop or SMPTE XML file.
@@ -82,26 +95,34 @@ public:
 	explicit SubtitleAsset (boost::filesystem::path file);
 
 	bool equals (
-		boost::shared_ptr<const Asset>,
+		std::shared_ptr<const Asset>,
 		EqualityOptions,
 		NoteHandler note
-		) const;
+		) const override;
 
-	std::list<boost::shared_ptr<Subtitle> > subtitles_during (Time from, Time to, bool starting) const;
-	std::list<boost::shared_ptr<Subtitle> > const & subtitles () const {
-		return _subtitles;
-	}
+	std::vector<std::shared_ptr<const Subtitle>> subtitles_during (Time from, Time to, bool starting) const;
+	std::vector<std::shared_ptr<const Subtitle>> subtitles_in_reel(std::shared_ptr<const dcp::ReelAsset> asset) const;
+	std::vector<std::shared_ptr<const Subtitle>> subtitles () const;
 
-	virtual void add (boost::shared_ptr<Subtitle>);
-	virtual void add_font (std::string id, boost::filesystem::path file) = 0;
-	std::map<std::string, Data> fonts_with_load_ids () const;
+	virtual void add (std::shared_ptr<Subtitle>);
+	virtual void add_font (std::string id, dcp::ArrayData data) = 0;
+	std::map<std::string, ArrayData> font_data () const;
+	std::map<std::string, boost::filesystem::path> font_filenames () const;
 
 	virtual void write (boost::filesystem::path) const = 0;
 	virtual std::string xml_as_string () const = 0;
 
 	Time latest_subtitle_out () const;
 
-	virtual std::list<boost::shared_ptr<LoadFontNode> > load_font_nodes () const = 0;
+	void fix_empty_font_ids ();
+
+	virtual std::vector<std::shared_ptr<LoadFontNode>> load_font_nodes () const = 0;
+
+	virtual int time_code_rate () const = 0;
+
+	std::string raw_xml () const {
+		return _raw_xml;
+	}
 
 protected:
 	friend struct ::interop_dcp_font_test;
@@ -126,14 +147,14 @@ protected:
 		boost::optional<Time> out;
 		boost::optional<Time> fade_up_time;
 		boost::optional<Time> fade_down_time;
-		enum Type {
+		enum class Type {
 			TEXT,
 			IMAGE
 		};
 		boost::optional<Type> type;
 	};
 
-	void parse_subtitles (xmlpp::Element const * node, std::list<ParseState>& state, boost::optional<int> tcr, Standard standard);
+	void parse_subtitles (xmlpp::Element const * node, std::vector<ParseState>& state, boost::optional<int> tcr, Standard standard);
 	ParseState font_node_state (xmlpp::Element const * node, Standard standard) const;
 	ParseState text_node_state (xmlpp::Element const * node) const;
 	ParseState image_node_state (xmlpp::Element const * node) const;
@@ -144,7 +165,7 @@ protected:
 	void subtitles_as_xml (xmlpp::Element* root, int time_code_rate, Standard standard) const;
 
 	/** All our subtitles, in no particular order */
-	std::list<boost::shared_ptr<Subtitle> > _subtitles;
+	std::vector<std::shared_ptr<Subtitle>> _subtitles;
 
 	class Font
 	{
@@ -156,7 +177,7 @@ protected:
 			, file (file_)
 		{}
 
-		Font (std::string load_id_, std::string uuid_, Data data_)
+		Font (std::string load_id_, std::string uuid_, ArrayData data_)
 			: load_id (load_id_)
 			, uuid (uuid_)
 			, data (data_)
@@ -164,24 +185,29 @@ protected:
 
 		std::string load_id;
 		std::string uuid;
-		Data data;
+		ArrayData data;
 		/** .ttf file that this data was last written to, if applicable */
 		mutable boost::optional<boost::filesystem::path> file;
 	};
 
 	/** TTF font data that we need */
-	std::list<Font> _fonts;
+	std::vector<Font> _fonts;
+
+	/** The raw XML data that we read from our asset; useful for validation */
+	std::string _raw_xml;
 
 private:
 	friend struct ::pull_fonts_test1;
 	friend struct ::pull_fonts_test2;
 	friend struct ::pull_fonts_test3;
 
-	void maybe_add_subtitle (std::string text, std::list<ParseState> const & parse_state, Standard standard);
+	void maybe_add_subtitle (std::string text, std::vector<ParseState> const & parse_state, Standard standard);
 
-	static void pull_fonts (boost::shared_ptr<order::Part> part);
+	static void pull_fonts (std::shared_ptr<order::Part> part);
 };
 
+
 }
+
 
 #endif

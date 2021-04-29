@@ -37,7 +37,7 @@
 #include "mxf.h"
 #include <getopt.h>
 #include <boost/optional.hpp>
-#include <boost/shared_ptr.hpp>
+#include <memory>
 #include <boost/filesystem.hpp>
 #include <iostream>
 #include <list>
@@ -46,9 +46,13 @@ using std::list;
 using std::cerr;
 using std::cout;
 using std::string;
-using boost::shared_ptr;
+using std::shared_ptr;
+using std::vector;
 using boost::optional;
-using boost::dynamic_pointer_cast;
+using std::dynamic_pointer_cast;
+#if BOOST_VERSION >= 106100
+using namespace boost::placeholders;
+#endif
 using namespace dcp;
 
 static bool verbose = false;
@@ -57,18 +61,18 @@ static void
 help (string n)
 {
 	cerr << "Syntax: " << n << " [OPTION] <DCP> <DCP>\n"
-	     << "  -V, --version                show libdcp version\n"
-	     << "  -h, --help                   show this help\n"
-	     << "  -v, --verbose                be verbose\n"
-	     << "      --cpl-annotation-texts   allow differing CPL annotation texts\n"
-	     << "      --reel-annotation-texts  allow differing reel annotation texts\n"
-	     << "  -a, --annotation-texts       allow different CPL and reel annotation texts\n"
-	     << "  -d, --issue-dates            allow different issue dates\n"
-	     << "  -m, --mean-pixel             maximum allowed mean pixel error (default 5)\n"
-	     << "  -s, --std-dev-pixel          maximum allowed standard deviation of pixel error (default 5)\n"
-	     << "      --key                    hexadecimal key to use to decrypt MXFs\n"
-	     << "  -k, --keep-going             carry on in the event of errors, if possible\n"
-	     << "      --ignore-missing-assets  ignore missing asset files\n"
+	     << "  -V, --version                     show libdcp version\n"
+	     << "  -h, --help                        show this help\n"
+	     << "  -v, --verbose                     be verbose\n"
+	     << "      --cpl-annotation-texts        allow differing CPL annotation texts\n"
+	     << "      --reel-annotation-texts       allow differing reel annotation texts\n"
+	     << "  -a, --annotation-texts            allow different CPL and reel annotation texts\n"
+	     << "  -d, --issue-dates                 allow different issue dates\n"
+	     << "  -m, --mean-pixel                  maximum allowed mean pixel error (default 5)\n"
+	     << "  -s, --std-dev-pixel               maximum allowed standard deviation of pixel error (default 5)\n"
+	     << "      --key                         hexadecimal key to use to decrypt MXFs\n"
+	     << "      --ignore-missing-assets       ignore missing asset files\n"
+	     << "      --export-differing-subtitles  export the first pair of differing image subtitles to the current working directory\n"
 	     << "\n"
 	     << "The <DCP>s are the DCP directories to compare.\n"
 	     << "Comparison is of metadata and content, ignoring timestamps\n"
@@ -78,29 +82,30 @@ help (string n)
 void
 note (NoteType t, string n)
 {
-	if (t == DCP_ERROR || verbose) {
+	if (t == NoteType::ERROR || verbose) {
 		cout << " " << n << "\n";
 		cout.flush ();
 	}
 }
 
+static
 DCP *
-load_dcp (boost::filesystem::path path, bool keep_going, bool ignore_missing_assets, optional<string> key)
+load_dcp (boost::filesystem::path path, bool ignore_missing_assets, optional<string> key)
 {
 	DCP* dcp = 0;
 	try {
 		dcp = new DCP (path);
-		DCP::ReadErrors errors;
-		dcp->read (keep_going, &errors);
-		filter_errors (errors, ignore_missing_assets);
-		for (DCP::ReadErrors::const_iterator i = errors.begin(); i != errors.end(); ++i) {
-			cerr << (*i)->what() << "\n";
+		vector<dcp::VerificationNote> notes;
+		dcp->read (&notes);
+		filter_notes (notes, ignore_missing_assets);
+		for (auto i: notes) {
+			cerr << dcp::note_to_string(i) << "\n";
 		}
 
 		if (key) {
-			list<shared_ptr<Asset> > assets = dcp->assets ();
-			for (list<shared_ptr<Asset> >::const_iterator i = assets.begin(); i != assets.end(); ++i) {
-				shared_ptr<MXF> mxf = dynamic_pointer_cast<MXF> (*i);
+			auto assets = dcp->assets ();
+			for (auto i: assets) {
+				auto mxf = dynamic_pointer_cast<MXF>(i);
 				if (mxf) {
 					mxf->set_key (Key (key.get ()));
 				}
@@ -118,12 +123,13 @@ load_dcp (boost::filesystem::path path, bool keep_going, bool ignore_missing_ass
 int
 main (int argc, char* argv[])
 {
+	dcp::init ();
+
 	EqualityOptions options;
 	options.max_mean_pixel_error = 5;
 	options.max_std_dev_pixel_error = 5;
 	options.reel_hashes_can_differ = true;
 	options.reel_annotation_texts_can_differ = false;
-	options.keep_going = false;
 	bool ignore_missing_assets = false;
 	optional<string> key;
 
@@ -135,7 +141,6 @@ main (int argc, char* argv[])
 			{ "verbose", no_argument, 0, 'v'},
 			{ "mean-pixel", required_argument, 0, 'm'},
 			{ "std-dev-pixel", required_argument, 0, 's'},
-			{ "keep-going", no_argument, 0, 'k'},
 			{ "annotation-texts", no_argument, 0, 'a'},
 			{ "issue-dates", no_argument, 0, 'd'},
 			/* From here we're using random capital letters for the short option */
@@ -143,10 +148,11 @@ main (int argc, char* argv[])
 			{ "cpl-annotation-texts", no_argument, 0, 'C'},
 			{ "key", required_argument, 0, 'D'},
 			{ "reel-annotation-texts", no_argument, 0, 'E'},
+			{ "export-differing-subtitles", no_argument, 0, 'F' },
 			{ 0, 0, 0, 0 }
 		};
 
-		int c = getopt_long (argc, argv, "Vhvm:s:kadACD:E", long_options, &option_index);
+		int c = getopt_long (argc, argv, "Vhvm:s:adACD:EF", long_options, &option_index);
 
 		if (c == -1) {
 			break;
@@ -168,9 +174,6 @@ main (int argc, char* argv[])
 		case 's':
 			options.max_std_dev_pixel_error = atof (optarg);
 			break;
-		case 'k':
-			options.keep_going = true;
-			break;
 		case 'a':
 			options.cpl_annotation_texts_can_differ = options.reel_annotation_texts_can_differ = true;
 			break;
@@ -190,6 +193,9 @@ main (int argc, char* argv[])
 		case 'E':
 			options.reel_annotation_texts_can_differ = true;
 			break;
+		case 'F':
+			options.export_differing_subtitles = true;
+			break;
 		}
 	}
 
@@ -208,8 +214,8 @@ main (int argc, char* argv[])
 		exit (EXIT_FAILURE);
 	}
 
-	DCP* a = load_dcp (argv[optind], options.keep_going, ignore_missing_assets, key);
-	DCP* b = load_dcp (argv[optind + 1], options.keep_going, ignore_missing_assets, key);
+	DCP* a = load_dcp (argv[optind], ignore_missing_assets, key);
+	DCP* b = load_dcp (argv[optind + 1], ignore_missing_assets, key);
 
 	/* I think this is just below the LSB at 16-bits (ie the 8th most significant bit at 24-bit) */
 	options.max_audio_sample_error = 255;

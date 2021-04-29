@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2012-2019 Carl Hetherington <cth@carlh.net>
+#    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 #
 #    This file is part of libdcp.
 #
@@ -39,7 +39,7 @@ def configure(conf):
 
     conf.check_cxx(fragment="""
                             #define BOOST_TEST_MODULE Config test\n
-    			    #include <boost/test/unit_test.hpp>\n
+                            #include <boost/test/unit_test.hpp>\n
                             int main() {}
                             """,
                    msg='Checking for boost unit testing library',
@@ -51,7 +51,7 @@ def configure(conf):
 def build(bld):
     obj = bld(features='cxx cxxprogram')
     obj.name   = 'tests'
-    obj.uselib = 'BOOST_TEST BOOST_FILESYSTEM BOOST_DATETIME OPENJPEG CXML XMLSEC1 SNDFILE OPENMP ASDCPLIB_CTH LIBXML++ OPENSSL'
+    obj.uselib = 'BOOST_TEST BOOST_FILESYSTEM BOOST_DATETIME OPENJPEG CXML XMLSEC1 SNDFILE OPENMP ASDCPLIB_CTH LIBXML++ OPENSSL XERCES DL'
     obj.cppflags = ['-fno-inline', '-fno-default-inline', '-fno-elide-constructors', '-g', '-O0']
     if bld.is_defined('HAVE_GCOV'):
         obj.use = 'libdcp%s_gcov' % bld.env.API_VERSION
@@ -66,6 +66,8 @@ def build(bld):
                  certificates_test.cc
                  colour_test.cc
                  colour_conversion_test.cc
+                 combine_test.cc
+                 cpl_metadata_test.cc
                  cpl_sar_test.cc
                  cpl_ratings_test.cc
                  dcp_font_test.cc
@@ -79,26 +81,29 @@ def build(bld):
                  frame_info_hash_test.cc
                  gamma_transfer_function_test.cc
                  interop_load_font_test.cc
+                 interop_subtitle_test.cc
                  local_time_test.cc
                  make_digest_test.cc
                  markers_test.cc
+                 mca_test.cc
                  kdm_test.cc
                  key_test.cc
+                 language_tag_test.cc
                  raw_convert_test.cc
                  read_dcp_test.cc
-                 read_interop_subtitle_test.cc
-                 read_smpte_subtitle_test.cc
                  reel_asset_test.cc
                  recovery_test.cc
                  rgb_xyz_test.cc
                  round_trip_test.cc
+                 shared_subtitle_test.cc
                  smpte_load_font_test.cc
                  smpte_subtitle_test.cc
                  sound_frame_test.cc
+                 stream_operators.cc
+                 sync_test.cc
                  test.cc
                  util_test.cc
                  utf8_test.cc
-                 write_subtitle_test.cc
                  verify_test.cc
                  """
     obj.target = 'tests'
@@ -106,7 +111,7 @@ def build(bld):
 
     obj = bld(features='cxx cxxprogram')
     obj.name   = 'subs_in_out'
-    obj.uselib = 'BOOST_TEST BOOST_FILESYSTEM OPENJPEG CXML OPENMP ASDCPLIB_CTH XMLSEC1 OPENSSL'
+    obj.uselib = 'BOOST_TEST BOOST_FILESYSTEM OPENJPEG CXML OPENMP ASDCPLIB_CTH XMLSEC1 OPENSSL DL'
     obj.cppflags = ['-fno-inline', '-fno-default-inline', '-fno-elide-constructors', '-g', '-O0']
     if bld.is_defined('HAVE_GCOV'):
         obj.use = 'libdcp%s_gcov' % bld.env.API_VERSION
@@ -121,7 +126,7 @@ def build(bld):
 
     obj = bld(features='cxx cxxprogram')
     obj.name   = 'rewrite_subs'
-    obj.uselib = 'BOOST_TEST BOOST_FILESYSTEM OPENJPEG CXML OPENMP ASDCPLIB_CTH XMLSEC1 OPENSSL'
+    obj.uselib = 'BOOST_TEST BOOST_FILESYSTEM OPENJPEG CXML OPENMP ASDCPLIB_CTH XMLSEC1 OPENSSL DL'
     obj.cppflags = ['-fno-inline', '-fno-default-inline', '-fno-elide-constructors', '-g', '-O0']
     if bld.is_defined('HAVE_GCOV'):
         obj.use = 'libdcp%s_gcov' % bld.env.API_VERSION
@@ -132,12 +137,4 @@ def build(bld):
         obj.use = 'libdcp%s' % bld.env.API_VERSION
     obj.source = 'rewrite_subs.cc'
     obj.target = 'rewrite_subs'
-    obj.install_path = ''
-
-    obj = bld(features='cxx cxxprogram')
-    obj.name   = 'bench'
-    obj.uselib = 'BOOST_FILESYSTEM OPENJPEG CXML OPENMP ASDCPLIB_CTH XMLSEC1 OPENSSL LIBXML++'
-    obj.use = 'libdcp%s' % bld.env.API_VERSION
-    obj.source = 'bench.cc'
-    obj.target = 'bench'
     obj.install_path = ''

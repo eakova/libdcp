@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2018 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,37 +31,51 @@
     files in the program, then also delete it here.
 */
 
-#include "interop_subtitle_asset.h"
-#include "interop_load_font_node.h"
-#include "subtitle_asset_internal.h"
-#include "xml.h"
-#include "raw_convert.h"
-#include "util.h"
-#include "font_asset.h"
-#include "dcp_assert.h"
+
+/** @file  src/interop_subtitle_asset.cc
+ *  @brief InteropSubtitleAsset class
+ */
+
+
 #include "compose.hpp"
+#include "dcp_assert.h"
+#include "font_asset.h"
+#include "interop_load_font_node.h"
+#include "interop_subtitle_asset.h"
+#include "raw_convert.h"
+#include "subtitle_asset_internal.h"
 #include "subtitle_image.h"
+#include "util.h"
+#include "warnings.h"
+#include "xml.h"
+LIBDCP_DISABLE_WARNINGS
 #include <libxml++/libxml++.h>
-#include <boost/foreach.hpp>
+LIBDCP_ENABLE_WARNINGS
 #include <boost/weak_ptr.hpp>
 #include <cmath>
 #include <cstdio>
+
 
 using std::list;
 using std::string;
 using std::cout;
 using std::cerr;
 using std::map;
-using boost::shared_ptr;
+using std::shared_ptr;
+using std::dynamic_pointer_cast;
+using std::vector;
+using std::make_shared;
 using boost::shared_array;
 using boost::optional;
-using boost::dynamic_pointer_cast;
 using namespace dcp;
+
 
 InteropSubtitleAsset::InteropSubtitleAsset (boost::filesystem::path file)
 	: SubtitleAsset (file)
 {
-	shared_ptr<cxml::Document> xml (new cxml::Document ("DCSubtitle"));
+	_raw_xml = dcp::file_to_string (file);
+
+	auto xml = make_shared<cxml::Document>("DCSubtitle");
 	xml->read_file (file);
 	_id = xml->string_child ("SubtitleID");
 	_reel_number = xml->string_child ("ReelNumber");
@@ -71,33 +85,34 @@ InteropSubtitleAsset::InteropSubtitleAsset (boost::filesystem::path file)
 
 	/* Now we need to drop down to xmlpp */
 
-	list<ParseState> ps;
-	xmlpp::Node::NodeList c = xml->node()->get_children ();
-	for (xmlpp::Node::NodeList::const_iterator i = c.begin(); i != c.end(); ++i) {
-		xmlpp::Element const * e = dynamic_cast<xmlpp::Element const *> (*i);
+	vector<ParseState> ps;
+	for (auto i: xml->node()->get_children()) {
+		auto e = dynamic_cast<xmlpp::Element const *>(i);
 		if (e && (e->get_name() == "Font" || e->get_name() == "Subtitle")) {
-			parse_subtitles (e, ps, optional<int>(), INTEROP);
+			parse_subtitles (e, ps, optional<int>(), Standard::INTEROP);
 		}
 	}
 
-	BOOST_FOREACH (shared_ptr<Subtitle> i, _subtitles) {
-		shared_ptr<SubtitleImage> si = dynamic_pointer_cast<SubtitleImage>(i);
+	for (auto i: _subtitles) {
+		auto si = dynamic_pointer_cast<SubtitleImage>(i);
 		if (si) {
 			si->read_png_file (file.parent_path() / String::compose("%1.png", si->id()));
 		}
 	}
 }
 
+
 InteropSubtitleAsset::InteropSubtitleAsset ()
 {
 
 }
 
+
 string
 InteropSubtitleAsset::xml_as_string () const
 {
 	xmlpp::Document doc;
-	xmlpp::Element* root = doc.create_root_node ("DCSubtitle");
+	auto root = doc.create_root_node ("DCSubtitle");
 	root->set_attribute ("Version", "1.0");
 
 	root->add_child("SubtitleID")->add_child_text (_id);
@@ -105,23 +120,26 @@ InteropSubtitleAsset::xml_as_string () const
 	root->add_child("ReelNumber")->add_child_text (raw_convert<string> (_reel_number));
 	root->add_child("Language")->add_child_text (_language);
 
-	for (list<shared_ptr<InteropLoadFontNode> >::const_iterator i = _load_font_nodes.begin(); i != _load_font_nodes.end(); ++i) {
+	for (auto i: _load_font_nodes) {
 		xmlpp::Element* load_font = root->add_child("LoadFont");
-		load_font->set_attribute ("Id", (*i)->id);
-		load_font->set_attribute ("URI", (*i)->uri);
+		load_font->set_attribute ("Id", i->id);
+		load_font->set_attribute ("URI", i->uri);
 	}
 
-	subtitles_as_xml (root, 250, INTEROP);
+	subtitles_as_xml (root, 250, Standard::INTEROP);
 
 	return doc.write_to_string ("UTF-8");
 }
 
+
 void
-InteropSubtitleAsset::add_font (string load_id, boost::filesystem::path file)
+InteropSubtitleAsset::add_font (string load_id, dcp::ArrayData data)
 {
-	_fonts.push_back (Font (load_id, make_uuid(), file));
-	_load_font_nodes.push_back (shared_ptr<InteropLoadFontNode> (new InteropLoadFontNode (load_id, file.leaf().string ())));
+	_fonts.push_back (Font(load_id, make_uuid(), data));
+	auto const uri = String::compose("font_%1.ttf", _load_font_nodes.size());
+	_load_font_nodes.push_back (shared_ptr<InteropLoadFontNode>(new InteropLoadFontNode(load_id, uri)));
 }
+
 
 bool
 InteropSubtitleAsset::equals (shared_ptr<const Asset> other_asset, EqualityOptions options, NoteHandler note) const
@@ -130,55 +148,58 @@ InteropSubtitleAsset::equals (shared_ptr<const Asset> other_asset, EqualityOptio
 		return false;
 	}
 
-	shared_ptr<const InteropSubtitleAsset> other = dynamic_pointer_cast<const InteropSubtitleAsset> (other_asset);
+	auto other = dynamic_pointer_cast<const InteropSubtitleAsset> (other_asset);
 	if (!other) {
 		return false;
 	}
 
-	list<shared_ptr<InteropLoadFontNode> >::const_iterator i = _load_font_nodes.begin ();
-	list<shared_ptr<InteropLoadFontNode> >::const_iterator j = other->_load_font_nodes.begin ();
+	if (!options.load_font_nodes_can_differ) {
+		auto i = _load_font_nodes.begin();
+		auto j = other->_load_font_nodes.begin();
 
-	while (i != _load_font_nodes.end ()) {
-		if (j == other->_load_font_nodes.end ()) {
-			note (DCP_ERROR, "<LoadFont> nodes differ");
-			return false;
+		while (i != _load_font_nodes.end ()) {
+			if (j == other->_load_font_nodes.end ()) {
+				note (NoteType::ERROR, "<LoadFont> nodes differ");
+				return false;
+			}
+
+			if (**i != **j) {
+				note (NoteType::ERROR, "<LoadFont> nodes differ");
+				return false;
+			}
+
+			++i;
+			++j;
 		}
-
-		if (**i != **j) {
-			note (DCP_ERROR, "<LoadFont> nodes differ");
-			return false;
-		}
-
-		++i;
-		++j;
 	}
 
 	if (_movie_title != other->_movie_title) {
-		note (DCP_ERROR, "Subtitle movie titles differ");
+		note (NoteType::ERROR, "Subtitle movie titles differ");
 		return false;
 	}
 
 	return true;
 }
 
-list<shared_ptr<LoadFontNode> >
+
+vector<shared_ptr<LoadFontNode>>
 InteropSubtitleAsset::load_font_nodes () const
 {
-	list<shared_ptr<LoadFontNode> > lf;
+	vector<shared_ptr<LoadFontNode>> lf;
 	copy (_load_font_nodes.begin(), _load_font_nodes.end(), back_inserter (lf));
 	return lf;
 }
 
-/** Write this content to an XML file with its fonts alongside */
+
 void
 InteropSubtitleAsset::write (boost::filesystem::path p) const
 {
-	FILE* f = fopen_boost (p, "w");
+	auto f = fopen_boost (p, "w");
 	if (!f) {
 		throw FileError ("Could not open file for writing", p, -1);
 	}
 
-	string const s = xml_as_string ();
+	auto const s = xml_as_string ();
 	/* length() here gives bytes not characters */
 	fwrite (s.c_str(), 1, s.length(), f);
 	fclose (f);
@@ -186,48 +207,44 @@ InteropSubtitleAsset::write (boost::filesystem::path p) const
 	_file = p;
 
 	/* Image subtitles */
-	BOOST_FOREACH (shared_ptr<dcp::Subtitle> i, _subtitles) {
-		shared_ptr<dcp::SubtitleImage> im = dynamic_pointer_cast<dcp::SubtitleImage> (i);
+	for (auto i: _subtitles) {
+		auto im = dynamic_pointer_cast<dcp::SubtitleImage> (i);
 		if (im) {
 			im->write_png_file(p.parent_path() / String::compose("%1.png", im->id()));
 		}
 	}
 
 	/* Fonts */
-	BOOST_FOREACH (shared_ptr<InteropLoadFontNode> i, _load_font_nodes) {
-		boost::filesystem::path file = p.parent_path() / i->uri;
-		FILE* f = fopen_boost (file, "wb");
-		if (!f) {
-			throw FileError ("could not open font file for writing", file, errno);
-		}
-		list<Font>::const_iterator j = _fonts.begin ();
+	for (auto i: _load_font_nodes) {
+		auto file = p.parent_path() / i->uri;
+		auto j = _fonts.begin();
 		while (j != _fonts.end() && j->load_id != i->id) {
 			++j;
 		}
 		if (j != _fonts.end ()) {
-			fwrite (j->data.data().get(), 1, j->data.size(), f);
+			j->data.write (file);
 			j->file = file;
 		}
-		fclose (f);
 	}
 }
+
 
 /** Look at a supplied list of assets and find the fonts.  Then match these
  *  fonts up with anything requested by a <LoadFont> so that _fonts contains
  *  a list of font ID, load ID and data.
  */
 void
-InteropSubtitleAsset::resolve_fonts (list<shared_ptr<Asset> > assets)
+InteropSubtitleAsset::resolve_fonts (vector<shared_ptr<Asset>> assets)
 {
-	BOOST_FOREACH (shared_ptr<Asset> i, assets) {
-		shared_ptr<FontAsset> font = dynamic_pointer_cast<FontAsset> (i);
+	for (auto i: assets) {
+		auto font = dynamic_pointer_cast<FontAsset> (i);
 		if (!font) {
 			continue;
 		}
 
-		BOOST_FOREACH (shared_ptr<InteropLoadFontNode> j, _load_font_nodes) {
+		for (auto j: _load_font_nodes) {
 			bool got = false;
-			BOOST_FOREACH (Font const & k, _fonts) {
+			for (auto const& k: _fonts) {
 				if (k.load_id == j->id) {
 					got = true;
 					break;
@@ -241,22 +258,24 @@ InteropSubtitleAsset::resolve_fonts (list<shared_ptr<Asset> > assets)
 	}
 }
 
+
 void
-InteropSubtitleAsset::add_font_assets (list<shared_ptr<Asset> >& assets)
+InteropSubtitleAsset::add_font_assets (vector<shared_ptr<Asset>>& assets)
 {
-	BOOST_FOREACH (Font const & i, _fonts) {
+	for (auto const& i: _fonts) {
 		DCP_ASSERT (i.file);
-		assets.push_back (shared_ptr<FontAsset> (new FontAsset (i.uuid, i.file.get ())));
+		assets.push_back (make_shared<FontAsset>(i.uuid, i.file.get()));
 	}
 }
+
 
 void
 InteropSubtitleAsset::write_to_assetmap (xmlpp::Node* node, boost::filesystem::path root) const
 {
 	Asset::write_to_assetmap (node, root);
 
-	BOOST_FOREACH (shared_ptr<dcp::Subtitle> i, _subtitles) {
-		shared_ptr<dcp::SubtitleImage> im = dynamic_pointer_cast<dcp::SubtitleImage> (i);
+	for (auto i: _subtitles) {
+		auto im = dynamic_pointer_cast<dcp::SubtitleImage> (i);
 		if (im) {
 			DCP_ASSERT (im->file());
 			write_file_to_assetmap (node, root, im->file().get(), im->id());
@@ -264,16 +283,35 @@ InteropSubtitleAsset::write_to_assetmap (xmlpp::Node* node, boost::filesystem::p
 	}
 }
 
+
 void
 InteropSubtitleAsset::add_to_pkl (shared_ptr<PKL> pkl, boost::filesystem::path root) const
 {
 	Asset::add_to_pkl (pkl, root);
 
-	BOOST_FOREACH (shared_ptr<dcp::Subtitle> i, _subtitles) {
-		shared_ptr<dcp::SubtitleImage> im = dynamic_pointer_cast<dcp::SubtitleImage> (i);
+	for (auto i: _subtitles) {
+		auto im = dynamic_pointer_cast<dcp::SubtitleImage> (i);
 		if (im) {
-			Data png_image = im->png_image ();
+			auto png_image = im->png_image ();
 			pkl->add_asset (im->id(), optional<string>(), make_digest(png_image), png_image.size(), "image/png");
 		}
 	}
 }
+
+
+void
+InteropSubtitleAsset::set_font_file (string load_id, boost::filesystem::path file)
+{
+	for (auto& i: _fonts) {
+		if (i.load_id == load_id) {
+			i.file = file;
+		}
+	}
+
+	for (auto i: _load_font_nodes) {
+		if (i->id == load_id) {
+			i->uri = file.filename().string();
+		}
+	}
+}
+

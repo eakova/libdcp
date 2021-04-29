@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2019 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2019-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,32 +31,42 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/reel_markers_asset.cc
+ *  @brief ReelMarkersAsset class
+ */
+
+
 #include "reel_asset.h"
 #include "dcp_time.h"
 #include <map>
 
+
 namespace dcp {
+
 
 class ReelMarkersAsset : public ReelAsset
 {
 public:
-	ReelMarkersAsset (Fraction edit_rate, int64_t entry_point);
-	explicit ReelMarkersAsset (boost::shared_ptr<const cxml::Node>);
+	ReelMarkersAsset (Fraction edit_rate, int64_t intrinsic_duration, int64_t entry_point);
+	explicit ReelMarkersAsset (std::shared_ptr<const cxml::Node>);
 
-	xmlpp::Node* write_to_cpl (xmlpp::Node* node, Standard standard) const;
-	bool equals (boost::shared_ptr<const ReelMarkersAsset>, EqualityOptions, NoteHandler) const;
+	xmlpp::Node* write_to_cpl (xmlpp::Node* node, Standard standard) const override;
+	bool equals (std::shared_ptr<const ReelMarkersAsset>, EqualityOptions, NoteHandler) const;
 
 	void set (Marker, Time);
 	void unset (Marker);
 	boost::optional<Time> get (Marker m) const;
+	std::map<Marker, Time> get () const {
+		return _markers;
+	}
 
 protected:
-	std::string cpl_node_name (Standard) const;
+	std::string cpl_node_name (Standard) const override;
 
 private:
-	void update_duration ();
-
 	std::map<Marker, Time> _markers;
 };
+
 
 }

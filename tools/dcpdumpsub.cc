@@ -36,7 +36,6 @@
 #include "decrypted_kdm_key.h"
 #include "encrypted_kdm.h"
 #include "util.h"
-#include <boost/foreach.hpp>
 #include <getopt.h>
 #include <cstdlib>
 #include <string>
@@ -61,6 +60,8 @@ help (string n)
 int
 main (int argc, char* argv[])
 {
+	dcp::init ();
+
 	bool extract_fonts = true;
 	optional<boost::filesystem::path> kdm_file;
 	optional<boost::filesystem::path> private_key_file;
@@ -113,7 +114,7 @@ main (int argc, char* argv[])
 		dcp::EncryptedKDM encrypted_kdm (dcp::file_to_string (kdm_file.get ()));
 		dcp::DecryptedKDM decrypted_kdm (encrypted_kdm, dcp::file_to_string (private_key_file.get()));
 		bool done = false;
-		BOOST_FOREACH (dcp::DecryptedKDMKey const & i, decrypted_kdm.keys()) {
+		for (auto const& i: decrypted_kdm.keys()) {
 			if (i.id() == *sub.key_id()) {
 				sub.set_key (i.key ());
 				done = true;
@@ -128,14 +129,14 @@ main (int argc, char* argv[])
 	cout << sub.xml_as_string() << "\n";
 
 	if (extract_fonts) {
-		map<string, dcp::Data> fonts = sub.fonts_with_load_ids ();
-		for (map<string, dcp::Data>::const_iterator i = fonts.begin(); i != fonts.end(); ++i) {
+		map<string, dcp::ArrayData> fonts = sub.font_data ();
+		for (map<string, dcp::ArrayData>::const_iterator i = fonts.begin(); i != fonts.end(); ++i) {
 			FILE* f = dcp::fopen_boost (i->first + ".ttf", "wb");
 			if (!f) {
 				cerr << "Could not open font file " << i->first << ".ttf for writing";
 				exit (EXIT_FAILURE);
 			}
-			fwrite (i->second.data().get(), 1, i->second.size(), f);
+			fwrite (i->second.data(), 1, i->second.size(), f);
 			fclose (f);
 		}
 	}

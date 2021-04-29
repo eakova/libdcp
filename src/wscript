@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2012-2019 Carl Hetherington <cth@carlh.net>
+#    Copyright (C) 2012-2020 Carl Hetherington <cth@carlh.net>
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -34,15 +34,18 @@ from waflib import TaskGen
 
 def build(bld):
     source = """
+             array_data.cc
              asset.cc
              asset_factory.cc
              asset_writer.cc
              atmos_asset.cc
              atmos_asset_writer.cc
+             bitstream.cc
              certificate_chain.cc
              certificate.cc
              chromaticity.cc
              colour_conversion.cc
+             combine.cc
              cpl.cc
              data.cc
              dcp.cc
@@ -51,14 +54,15 @@ def build(bld):
              decrypted_kdm_key.cc
              encrypted_kdm.cc
              exceptions.cc
-             file.cc
              font_asset.cc
+             fsk.cc
              gamma_transfer_function.cc
              identity_transfer_function.cc
              interop_load_font_node.cc
              interop_subtitle_asset.cc
-             j2k.cc
+             j2k_transcode.cc
              key.cc
+             language_tag.cc
              local_time.cc
              locale_convert.cc
              metadata.cc
@@ -78,10 +82,14 @@ def build(bld):
              reel_asset.cc
              reel_atmos_asset.cc
              reel_closed_caption_asset.cc
+             reel_file_asset.cc
+             reel_interop_closed_caption_asset.cc
+             reel_interop_subtitle_asset.cc
              reel_mono_picture_asset.cc
-             reel_mxf.cc
              reel_picture_asset.cc
              reel_markers_asset.cc
+             reel_smpte_closed_caption_asset.cc
+             reel_smpte_subtitle_asset.cc
              reel_sound_asset.cc
              reel_stereo_picture_asset.cc
              reel_subtitle_asset.cc
@@ -105,10 +113,12 @@ def build(bld):
              types.cc
              util.cc
              verify.cc
+             verify_j2k.cc
              version.cc
              """
 
     headers = """
+              array_data.h
               asset.h
               asset_reader.h
               asset_writer.h
@@ -120,24 +130,28 @@ def build(bld):
               certificate.h
               chromaticity.h
               colour_conversion.h
+              combine.h
+              compose.hpp
               cpl.h
               crypto_context.h
+              data.h
               dcp.h
               dcp_assert.h
               dcp_time.h
-              data.h
               decrypted_kdm.h
               decrypted_kdm_key.h
               encrypted_kdm.h
               exceptions.h
               font_asset.h
               frame.h
+              fsk.h
               gamma_transfer_function.h
               identity_transfer_function.h
               interop_load_font_node.h
               interop_subtitle_asset.h
-              j2k.h
+              j2k_transcode.h
               key.h
+              language_tag.h
               load_font_node.h
               local_time.h
               locale_convert.h
@@ -159,11 +173,15 @@ def build(bld):
               reel_asset.h
               reel_atmos_asset.h
               reel_closed_caption_asset.h
+              reel_file_asset.h
+              reel_interop_closed_caption_asset.h
+              reel_interop_subtitle_asset.h
               reel_markers_asset.h
               reel_mono_picture_asset.h
-              reel_mxf.h
               reel_picture_asset.h
               reel_sound_asset.h
+              reel_smpte_closed_caption_asset.h
+              reel_smpte_subtitle_asset.h
               reel_stereo_picture_asset.h
               reel_subtitle_asset.h
               ref.h
@@ -186,7 +204,9 @@ def build(bld):
               types.h
               util.h
               verify.h
+              verify_j2k.h
               version.h
+              warnings.h
               """
 
     # Main library
@@ -197,7 +217,7 @@ def build(bld):
     obj.name = 'libdcp%s' % bld.env.API_VERSION
     obj.target = 'dcp%s' % bld.env.API_VERSION
     obj.export_includes = ['.']
-    obj.uselib = 'BOOST_FILESYSTEM BOOST_SIGNALS2 BOOST_DATETIME OPENSSL SIGC++ LIBXML++ OPENJPEG CXML XMLSEC1 ASDCPLIB_CTH'
+    obj.uselib = 'BOOST_FILESYSTEM BOOST_SIGNALS2 BOOST_DATETIME OPENSSL SIGC++ LIBXML++ OPENJPEG CXML XMLSEC1 ASDCPLIB_CTH XERCES'
     obj.source = source
 
     # Library for gcov
@@ -209,7 +229,7 @@ def build(bld):
         obj.name = 'libdcp%s_gcov' % bld.env.API_VERSION
         obj.target = 'dcp%s_gcov' % bld.env.API_VERSION
         obj.export_includes = ['.']
-        obj.uselib = 'BOOST_FILESYSTEM BOOST_SIGNALS2 BOOST_DATETIME OPENSSL SIGC++ LIBXML++ OPENJPEG CXML XMLSEC1 ASDCPLIB_CTH'
+        obj.uselib = 'BOOST_FILESYSTEM BOOST_SIGNALS2 BOOST_DATETIME OPENSSL SIGC++ LIBXML++ OPENJPEG CXML XMLSEC1 ASDCPLIB_CTH XERCES'
         obj.use = 'libkumu-libdcp%s libasdcp-libdcp%s' % (bld.env.API_VERSION, bld.env.API_VERSION)
         obj.source = source
         obj.cppflags = ['-fprofile-arcs', '-ftest-coverage', '-fno-inline', '-fno-default-inline', '-fno-elide-constructors', '-g', '-O0']

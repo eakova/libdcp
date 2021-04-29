@@ -42,7 +42,6 @@
 #include "atmos_asset_writer.h"
 #include "exceptions.h"
 #include <asdcp/AS_DCP.h>
-#include <boost/foreach.hpp>
 #include <getopt.h>
 #include <string>
 
@@ -50,7 +49,7 @@ using std::string;
 using std::cerr;
 using std::cout;
 using boost::optional;
-using boost::shared_ptr;
+using std::shared_ptr;
 
 static void
 help (string n)
@@ -66,6 +65,8 @@ help (string n)
 int
 main (int argc, char* argv[])
 {
+	dcp::init ();
+
 	optional<boost::filesystem::path> output_file;
 	optional<boost::filesystem::path> kdm_file;
 	optional<boost::filesystem::path> private_key_file;
@@ -141,7 +142,6 @@ main (int argc, char* argv[])
 			in.first_frame(),
 			in.max_channel_count(),
 			in.max_object_count(),
-			in.atmos_id(),
 			in.atmos_version()
 			);
 		shared_ptr<dcp::AtmosAssetWriter> writer = out.start_write (output_file.get());
@@ -149,7 +149,7 @@ main (int argc, char* argv[])
 			shared_ptr<const dcp::AtmosFrame> f = reader->get_frame (i);
 			writer->write (f->data(), f->size());
 		}
-	} catch (dcp::DCPReadError& e) {
+	} catch (dcp::ReadError& e) {
 		cerr << "Unknown MXF format.\n";
 		return EXIT_FAILURE;
 	}

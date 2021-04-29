@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2016 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,6 +31,12 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/mono_picture_asset.cc
+ *  @brief MonoPictureAsset class
+ */
+
+
 #include "mono_picture_asset.h"
 #include "mono_picture_asset_writer.h"
 #include "mono_picture_asset_reader.h"
@@ -41,37 +47,44 @@
 #include <asdcp/AS_DCP.h>
 #include <asdcp/KM_fileio.h>
 
+
 using std::string;
 using std::vector;
 using std::list;
 using std::pair;
-using boost::shared_ptr;
-using boost::dynamic_pointer_cast;
+using std::shared_ptr;
+using std::dynamic_pointer_cast;
+using std::make_shared;
+#if BOOST_VERSION >= 106100
+using namespace boost::placeholders;
+#endif
 using namespace dcp;
+
 
 MonoPictureAsset::MonoPictureAsset (boost::filesystem::path file)
 	: PictureAsset (file)
 {
 	ASDCP::JP2K::MXFReader reader;
-	Kumu::Result_t r = reader.OpenRead (file.string().c_str());
-	if (ASDCP_FAILURE (r)) {
-		boost::throw_exception (MXFFileError ("could not open MXF file for reading", file.string(), r));
+	auto r = reader.OpenRead (file.string().c_str());
+	if (ASDCP_FAILURE(r)) {
+		boost::throw_exception (MXFFileError("could not open MXF file for reading", file.string(), r));
 	}
 
 	ASDCP::JP2K::PictureDescriptor desc;
-	if (ASDCP_FAILURE (reader.FillPictureDescriptor (desc))) {
-		boost::throw_exception (DCPReadError ("could not read video MXF information"));
+	if (ASDCP_FAILURE (reader.FillPictureDescriptor(desc))) {
+		boost::throw_exception (ReadError("could not read video MXF information"));
 	}
 
 	read_picture_descriptor (desc);
 
 	ASDCP::WriterInfo info;
 	if (ASDCP_FAILURE (reader.FillWriterInfo (info))) {
-		boost::throw_exception (DCPReadError ("could not read video MXF information"));
+		boost::throw_exception (ReadError("could not read video MXF information"));
 	}
 
 	_id = read_writer_info (info);
 }
+
 
 MonoPictureAsset::MonoPictureAsset (Fraction edit_rate, Standard standard)
 	: PictureAsset (edit_rate, standard)
@@ -79,24 +92,26 @@ MonoPictureAsset::MonoPictureAsset (Fraction edit_rate, Standard standard)
 
 }
 
+
 static void
 storing_note_handler (list<pair<NoteType, string> >& notes, NoteType t, string s)
 {
 	notes.push_back (make_pair (t, s));
 }
 
+
 bool
 MonoPictureAsset::equals (shared_ptr<const Asset> other, EqualityOptions opt, NoteHandler note) const
 {
-	if (!dynamic_pointer_cast<const MonoPictureAsset> (other)) {
+	if (!dynamic_pointer_cast<const MonoPictureAsset>(other)) {
 		return false;
 	}
 
 	ASDCP::JP2K::MXFReader reader_A;
 	DCP_ASSERT (_file);
-	Kumu::Result_t r = reader_A.OpenRead (_file->string().c_str());
-	if (ASDCP_FAILURE (r)) {
-		boost::throw_exception (MXFFileError ("could not open MXF file for reading", _file->string(), r));
+	auto r = reader_A.OpenRead (_file->string().c_str());
+	if (ASDCP_FAILURE(r)) {
+		boost::throw_exception (MXFFileError("could not open MXF file for reading", _file->string(), r));
 	}
 
 	ASDCP::JP2K::MXFReader reader_B;
@@ -108,24 +123,24 @@ MonoPictureAsset::equals (shared_ptr<const Asset> other, EqualityOptions opt, No
 
 	ASDCP::JP2K::PictureDescriptor desc_A;
 	if (ASDCP_FAILURE (reader_A.FillPictureDescriptor (desc_A))) {
-		boost::throw_exception (DCPReadError ("could not read video MXF information"));
+		boost::throw_exception (ReadError ("could not read video MXF information"));
 	}
 	ASDCP::JP2K::PictureDescriptor desc_B;
 	if (ASDCP_FAILURE (reader_B.FillPictureDescriptor (desc_B))) {
-		boost::throw_exception (DCPReadError ("could not read video MXF information"));
+		boost::throw_exception (ReadError ("could not read video MXF information"));
 	}
 
 	if (!descriptor_equals (desc_A, desc_B, note)) {
 		return false;
 	}
 
-	shared_ptr<const MonoPictureAsset> other_picture = dynamic_pointer_cast<const MonoPictureAsset> (other);
+	auto other_picture = dynamic_pointer_cast<const MonoPictureAsset> (other);
 	DCP_ASSERT (other_picture);
 
 	bool result = true;
 
-	shared_ptr<MonoPictureAssetReader> reader = start_read ();
-	shared_ptr<MonoPictureAssetReader> other_reader = other_picture->start_read ();
+	auto reader = start_read ();
+	auto other_reader = other_picture->start_read ();
 
 #ifdef LIBDCP_OPENMP
 #pragma omp parallel for
@@ -138,15 +153,15 @@ MonoPictureAsset::equals (shared_ptr<const Asset> other, EqualityOptions opt, No
 
 		if (result || opt.keep_going) {
 
-			shared_ptr<const MonoPictureFrame> frame_A = reader->get_frame (i);
-			shared_ptr<const MonoPictureFrame> frame_B = other_reader->get_frame (i);
+			auto frame_A = reader->get_frame (i);
+			auto frame_B = other_reader->get_frame (i);
 
 			list<pair<NoteType, string> > notes;
 
 			if (!frame_buffer_equals (
 				    i, opt, bind (&storing_note_handler, boost::ref(notes), _1, _2),
-				    frame_A->j2k_data(), frame_A->j2k_size(),
-				    frame_B->j2k_data(), frame_B->j2k_size()
+				    frame_A->data(), frame_A->size(),
+				    frame_B->data(), frame_B->size()
 				    )) {
 				result = false;
 			}
@@ -155,9 +170,9 @@ MonoPictureAsset::equals (shared_ptr<const Asset> other, EqualityOptions opt, No
 #pragma omp critical
 #endif
 			{
-				note (DCP_PROGRESS, String::compose ("Compared video frame %1 of %2", i, _intrinsic_duration));
-				for (list<pair<NoteType, string> >::const_iterator i = notes.begin(); i != notes.end(); ++i) {
-					note (i->first, i->second);
+				note (NoteType::PROGRESS, String::compose("Compared video frame %1 of %2", i, _intrinsic_duration));
+				for (auto const& i: notes) {
+					note (i.first, i.second);
 				}
 			}
 		}
@@ -166,17 +181,20 @@ MonoPictureAsset::equals (shared_ptr<const Asset> other, EqualityOptions opt, No
 	return result;
 }
 
+
 shared_ptr<PictureAssetWriter>
 MonoPictureAsset::start_write (boost::filesystem::path file, bool overwrite)
 {
-	/* XXX: can't we use shared_ptr here? */
-	return shared_ptr<MonoPictureAssetWriter> (new MonoPictureAssetWriter (this, file, overwrite));
+	/* Can't use make_shared here as the MonoPictureAssetWriter constructor is private */
+	return shared_ptr<MonoPictureAssetWriter>(new MonoPictureAssetWriter(this, file, overwrite));
 }
 
 shared_ptr<MonoPictureAssetReader>
 MonoPictureAsset::start_read () const
 {
-	return shared_ptr<MonoPictureAssetReader> (new MonoPictureAssetReader (this, key(), standard()));
+	/* Can't use make_shared here as the MonoPictureAssetReader constructor is private */
+	return shared_ptr<MonoPictureAssetReader>(new MonoPictureAssetReader(this, key(), standard()));
+
 }
 
 string

@@ -36,7 +36,6 @@
 #include "util.h"
 #include "exceptions.h"
 #include "certificate_chain.h"
-#include <boost/foreach.hpp>
 #include <getopt.h>
 
 using std::string;
@@ -56,13 +55,16 @@ static string
 tm_to_string (struct tm t)
 {
 	char buffer[64];
-	snprintf (buffer, 64, "%02d/%02d/%02d %02d:%02d:%02d", t.tm_mday, t.tm_mon, (t.tm_year + 1900), t.tm_hour, t.tm_min, t.tm_sec);
+	snprintf (buffer, 64, "%02d/%02d/%02d %02d:%02d:%02d", t.tm_mday, t.tm_mon + 1, t.tm_year + 1900, t.tm_hour, t.tm_min, t.tm_sec);
 	return buffer;
 }
 
 int
 main (int argc, char* argv[])
+try
 {
+	dcp::init ();
+
 	optional<boost::filesystem::path> private_key_file;
 
 	int option_index = 0;
@@ -99,7 +101,7 @@ main (int argc, char* argv[])
 	dcp::EncryptedKDM enc_kdm (dcp::file_to_string (kdm_file));
 
 	if (enc_kdm.annotation_text()) {
-		cout << "Annotation:        " << enc_kdm.annotation_text().get() << "\n";
+		cout << "Annotation:       " << enc_kdm.annotation_text().get() << "\n";
 	}
 	cout << "Content title:    " << enc_kdm.content_title_text() << "\n";
 	cout << "CPL id:           " << enc_kdm.cpl_id() << "\n";
@@ -109,7 +111,7 @@ main (int argc, char* argv[])
 
 	cout << "Signer chain:\n";
 	dcp::CertificateChain signer = enc_kdm.signer_certificate_chain ();
-	BOOST_FOREACH (dcp::Certificate const & i, signer.root_to_leaf()) {
+	for (auto const& i: signer.root_to_leaf()) {
 		cout << "\tCertificate:\n";
 		cout << "\t\tSubject: " << i.subject() << "\n";
 		cout << "\t\tSubject common name: " << i.subject_common_name() << "\n";
@@ -125,11 +127,11 @@ main (int argc, char* argv[])
 	if (private_key_file) {
 		try {
 			dcp::DecryptedKDM dec_kdm (enc_kdm, dcp::file_to_string (private_key_file.get()));
-			cout << "\nKeys";
-			BOOST_FOREACH (dcp::DecryptedKDMKey i, dec_kdm.keys ()) {
+			cout << "\nKeys:";
+			for (auto i: dec_kdm.keys()) {
 				cout << "\n";
 				cout << "\tID:       " << i.id() << "\n";
-				cout << "\tStandard: " << (i.standard() == dcp::SMPTE ? "SMPTE" : "Interop") << "\n";
+				cout << "\tStandard: " << (i.standard() == dcp::Standard::SMPTE ? "SMPTE" : "Interop") << "\n";
 				cout << "\tCPL ID:   " << i.cpl_id() << "\n";
 				if (i.type()) {
 					cout << "\tType:     " << i.type().get() << "\n";
@@ -143,4 +145,9 @@ main (int argc, char* argv[])
 	}
 
 	return 0;
+}
+catch (std::exception& e)
+{
+	cerr << "Error: " << e.what() << "\n";
+	exit (EXIT_FAILURE);
 }

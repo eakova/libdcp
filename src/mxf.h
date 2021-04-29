@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2014 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,33 +31,44 @@
     files in the program, then also delete it here.
 */
 
+
+/** @file  src/mxf.h
+ *  @brief MXF class
+ */
+
+
 #ifndef LIBDCP_MXF_H
 #define LIBDCP_MXF_H
+
 
 #include "asset.h"
 #include "key.h"
 #include "metadata.h"
 #include "dcp_assert.h"
-
 #include <boost/signals2.hpp>
+
 
 namespace ASDCP {
 	class AESDecContext;
 	struct WriterInfo;
 }
 
+
 /* Undefine some stuff that the OS X 10.5 SDK defines */
 #undef Key
 #undef set_key
 
+
 namespace dcp
 {
+
 
 class MXFMetadata;
 class PictureAssetWriter;
 
+
 /** @class MXF
- *  @brief Parent for classes which represent MXF files.
+ *  @brief Parent for classes which represent MXF files
  */
 class MXF
 {
@@ -82,6 +93,11 @@ public:
 		return _key_id;
 	}
 
+	/** Set the (private) key that will be used to encrypt or decrypt this MXF's content
+	 *  This is the top-secret key that is distributed (itself encrypted) to cinemas
+	 *  via Key Delivery Messages (KDMs)
+	 *  @param key Key to use
+	 */
 	virtual void set_key (Key);
 
 	/** @return encryption/decryption key, if one has been set */
@@ -120,13 +136,18 @@ public:
 
 protected:
 	template <class P, class Q>
-	friend void start (PictureAssetWriter* writer, boost::shared_ptr<P> state, Q* mxf, uint8_t const * data, int size);
+	friend void start (PictureAssetWriter* writer, std::shared_ptr<P> state, Q* mxf, uint8_t const * data, int size);
 
 	MXF ();
 
+	/** Read an ASDCP::WriterInfo struct, extracting things for our
+	 *  member variables.
+	 *  @return AssetUUID of the MXF
+	 */
 	std::string read_writer_info (ASDCP::WriterInfo const &);
-	/** Fill in a ADSCP::WriteInfo struct.
-	 *  @param w struct to fill in.
+
+	/** Fill in a ASDCP::WriteInfo struct.
+	 *  @param w struct to fill in
 	 */
 	void fill_writer_info (ASDCP::WriterInfo* w, std::string id) const;
 
@@ -139,6 +160,8 @@ protected:
 	boost::optional<Standard> _standard;
 };
 
+
 }
+
 
 #endif

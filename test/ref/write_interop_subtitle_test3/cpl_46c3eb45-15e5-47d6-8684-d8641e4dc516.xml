@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CompositionPlaylist xmlns="http://www.digicine.com/PROTO-ASDCP-CPL-20040511#">
+  <Id>urn:uuid:46c3eb45-15e5-47d6-8684-d8641e4dc516</Id>
+  <AnnotationText>Created by libdcp</AnnotationText>
+  <IssueDate>2018-09-02T04:45:18+00:00</IssueDate>
+  <Issuer>libdcp</Issuer>
+  <Creator>libdcp</Creator>
+  <ContentTitleText>My film</ContentTitleText>
+  <ContentKind>feature</ContentKind>
+  <ContentVersion>
+    <Id>urn:uuid:e98d059d-645f-4343-a30f-edc61d58b8e0</Id>
+    <LabelText>foo</LabelText>
+  </ContentVersion>
+  <RatingList/>
+  <ReelList>
+    <Reel>
+      <Id>urn:uuid:1fab8bb0-cfaf-4225-ad6d-01768bc10470</Id>
+      <AssetList>
+        <MainSubtitle>
+          <Id>urn:uuid:a6c58cff-3e1e-4b38-acec-a42224475ef6</Id>
+          <AnnotationText></AnnotationText>
+          <EditRate>24 1</EditRate>
+          <IntrinsicDuration>6046</IntrinsicDuration>
+          <EntryPoint>0</EntryPoint>
+          <Duration>6046</Duration>
+          <Hash>cVnFjMLTQnSIAlIzJpNB/p7B230=</Hash>
+        </MainSubtitle>
+      </AssetList>
+    </Reel>
+  </ReelList>
+</CompositionPlaylist>

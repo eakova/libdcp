@@ -31,40 +31,44 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/reel_picture_asset.h
- *  @brief ReelPictureAsset class.
+ *  @brief ReelPictureAsset class
  */
+
 
 #ifndef LIBDCP_REEL_PICTURE_ASSET_H
 #define LIBDCP_REEL_PICTURE_ASSET_H
 
-#include "reel_mxf.h"
-#include "reel_asset.h"
+
+#include "reel_file_asset.h"
 #include "picture_asset.h"
+
 
 namespace dcp {
 
+
 /** @class ReelPictureAsset
- *  @brief Part of a Reel's description which refers to a picture asset.
+ *  @brief Part of a Reel's description which refers to a picture asset
  */
-class ReelPictureAsset : public ReelAsset, public ReelMXF
+class ReelPictureAsset : public ReelFileAsset
 {
 public:
-	ReelPictureAsset (boost::shared_ptr<PictureAsset> asset, int64_t entry_point);
-	explicit ReelPictureAsset (boost::shared_ptr<const cxml::Node>);
-
-	virtual xmlpp::Node* write_to_cpl (xmlpp::Node* node, Standard standard) const;
-	bool equals (boost::shared_ptr<const ReelPictureAsset>, EqualityOptions, NoteHandler) const;
+	ReelPictureAsset (std::shared_ptr<PictureAsset> asset, int64_t entry_point);
+	explicit ReelPictureAsset (std::shared_ptr<const cxml::Node>);
 
 	/** @return the PictureAsset that this object refers to */
-	boost::shared_ptr<const PictureAsset> asset () const {
-		return asset_of_type<const PictureAsset> ();
+	std::shared_ptr<const PictureAsset> asset () const {
+		return asset_of_type<const PictureAsset>();
 	}
 
 	/** @return the PictureAsset that this object refers to */
-	boost::shared_ptr<PictureAsset> asset () {
-		return asset_of_type<PictureAsset> ();
+	std::shared_ptr<PictureAsset> asset () {
+		return asset_of_type<PictureAsset>();
 	}
+
+	virtual xmlpp::Node* write_to_cpl (xmlpp::Node* node, Standard standard) const override;
+	bool equals (std::shared_ptr<const ReelPictureAsset>, EqualityOptions, NoteHandler) const;
 
 	/** @return picture frame rate */
 	Fraction frame_rate () const {
@@ -83,12 +87,16 @@ public:
 	}
 
 private:
-	std::string key_type () const;
+	boost::optional<std::string> key_type () const override {
+		return std::string ("MDIK");
+	}
 
 	Fraction _frame_rate;
 	Fraction _screen_aspect_ratio;
 };
 
+
 }
+
 
 #endif

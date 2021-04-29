@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2016 Carl Hetherington <cth@carlh.net>
+    Copyright (C) 2016-2021 Carl Hetherington <cth@carlh.net>
 
     This file is part of libdcp.
 
@@ -31,21 +31,26 @@
     files in the program, then also delete it here.
 */
 
+
 /** @file  src/s_gamut3_transfer_function.h
  *  @brief SGamut3TransferFunction class.
  */
 
+
 #include "transfer_function.h"
 
+
 namespace dcp {
+
 
 class SGamut3TransferFunction : public TransferFunction
 {
 public:
-	bool about_equal (boost::shared_ptr<const TransferFunction> other, double epsilon) const;
+	bool about_equal (std::shared_ptr<const TransferFunction> other, double epsilon) const override;
 
 protected:
-	double * make_lut (int bit_depth, bool inverse) const;
+	double * make_lut (int bit_depth, bool inverse) const override;
 };
+
 
 }
