@@ -103,10 +103,15 @@ SMPTESubtitleAsset::SMPTESubtitleAsset (boost::filesystem::path file)
 		_id = read_writer_info (info);
 		if (!_key_id) {
 			/* Not encrypted; read it in now */
-			reader->ReadTimedTextResource (_raw_xml);
-			xml->read_string (_raw_xml);
+			string xml_string;
+			reader->ReadTimedTextResource (xml_string);
+			_raw_xml = xml_string;
+			xml->read_string (xml_string);
 			parse_xml (xml);
-			read_mxf_descriptor (reader, make_shared<DecryptionContext>(optional<Key>(), Standard::SMPTE));
+			read_mxf_descriptor (reader);
+			read_mxf_resources (reader, make_shared<DecryptionContext>(optional<Key>(), Standard::SMPTE));
+		} else {
+			read_mxf_descriptor (reader);
 		}
 	} else {
 		/* Plain XML */
@@ -202,7 +207,7 @@ SMPTESubtitleAsset::parse_xml (shared_ptr<cxml::Document> xml)
 
 
 void
-SMPTESubtitleAsset::read_mxf_descriptor (shared_ptr<ASDCP::TimedText::MXFReader> reader, shared_ptr<DecryptionContext> dec)
+SMPTESubtitleAsset::read_mxf_resources (shared_ptr<ASDCP::TimedText::MXFReader> reader, shared_ptr<DecryptionContext> dec)
 {
 	ASDCP::TimedText::TimedTextDescriptor descriptor;
 	reader->FillTimedTextDescriptor (descriptor);
@@ -253,6 +258,14 @@ SMPTESubtitleAsset::read_mxf_descriptor (shared_ptr<ASDCP::TimedText::MXFReader>
 			break;
 		}
 	}
+}
+
+
+void
+SMPTESubtitleAsset::read_mxf_descriptor (shared_ptr<ASDCP::TimedText::MXFReader> reader)
+{
+	ASDCP::TimedText::TimedTextDescriptor descriptor;
+	reader->FillTimedTextDescriptor (descriptor);
 
 	_intrinsic_duration = descriptor.ContainerDuration;
 	/* The thing which is called AssetID in the descriptor is also known as the
@@ -296,11 +309,13 @@ SMPTESubtitleAsset::set_key (Key key)
 	}
 
 	auto dec = make_shared<DecryptionContext>(key, Standard::SMPTE);
-	reader->ReadTimedTextResource (_raw_xml, dec->context(), dec->hmac());
+	string xml_string;
+	reader->ReadTimedTextResource (xml_string, dec->context(), dec->hmac());
+	_raw_xml = xml_string;
 	auto xml = make_shared<cxml::Document>("SubtitleReel");
-	xml->read_string (_raw_xml);
+	xml->read_string (xml_string);
 	parse_xml (xml);
-	read_mxf_descriptor (reader, dec);
+	read_mxf_resources (reader, dec);
 }
 
 
@@ -332,7 +347,8 @@ SMPTESubtitleAsset::xml_as_string () const
 	root->set_namespace_declaration (subtitle_smpte_ns, "dcst");
 	root->set_namespace_declaration ("http://www.w3.org/2001/XMLSchema", "xs");
 
-	root->add_child("Id", "dcst")->add_child_text ("urn:uuid:" + _xml_id);
+	DCP_ASSERT (_xml_id);
+	root->add_child("Id", "dcst")->add_child_text ("urn:uuid:" + *_xml_id);
 	root->add_child("ContentTitleText", "dcst")->add_child_text (_content_title_text);
 	if (_annotation_text) {
 		root->add_child("AnnotationText", "dcst")->add_child_text (_annotation_text.get ());
@@ -407,7 +423,8 @@ SMPTESubtitleAsset::write (boost::filesystem::path p) const
 
 	descriptor.NamespaceName = subtitle_smpte_ns;
 	unsigned int c;
-	Kumu::hex2bin (_xml_id.c_str(), descriptor.AssetID, ASDCP::UUIDlen, &c);
+	DCP_ASSERT (_xml_id);
+	Kumu::hex2bin (_xml_id->c_str(), descriptor.AssetID, ASDCP::UUIDlen, &c);
 	DCP_ASSERT (c == Kumu::UUID_Length);
 	descriptor.ContainerDuration = _intrinsic_duration;
 
@@ -420,7 +437,9 @@ SMPTESubtitleAsset::write (boost::filesystem::path p) const
 		boost::throw_exception (FileError ("could not open subtitle MXF for writing", p.string(), r));
 	}
 
-	r = writer.WriteTimedTextResource (xml_as_string (), enc.context(), enc.hmac());
+	_raw_xml = xml_as_string ();
+
+	r = writer.WriteTimedTextResource (*_raw_xml, enc.context(), enc.hmac());
 	if (ASDCP_FAILURE (r)) {
 		boost::throw_exception (MXFFileError ("could not write XML to timed text resource", p.string(), r));
 	}
@@ -558,3 +577,4 @@ SMPTESubtitleAsset::add (shared_ptr<Subtitle> s)
 	SubtitleAsset::add (s);
 	_intrinsic_duration = latest_subtitle_out().as_editable_units_ceil(_edit_rate.numerator / _edit_rate.denominator);
 }
+

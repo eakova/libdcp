@@ -379,6 +379,8 @@ public:
 		 *  file contains the asset filename
 		 */
 		MISMATCHED_TIMED_TEXT_DURATION,
+		/** Something could not be verified because content is encrypted and no key is available */
+		MISSED_CHECK_OF_ENCRYPTED,
 	};
 
 	VerificationNote (Type type, Code code)
@@ -455,6 +457,7 @@ std::vector<VerificationNote> verify (
 std::string note_to_string (dcp::VerificationNote note);
 
 bool operator== (dcp::VerificationNote const& a, dcp::VerificationNote const& b);
+bool operator< (dcp::VerificationNote const& a, dcp::VerificationNote const& b);
 
 std::ostream& operator<<(std::ostream& s, dcp::VerificationNote const& note);
 

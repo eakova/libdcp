@@ -703,12 +703,17 @@ verify_smpte_subtitle_asset (
 	}
 
 	DCP_ASSERT (asset->resource_id());
-	if (asset->resource_id().get() != asset->xml_id()) {
-		notes.push_back ({ VerificationNote::Type::BV21_ERROR, VerificationNote::Code::MISMATCHED_TIMED_TEXT_RESOURCE_ID });
-	}
+	auto xml_id = asset->xml_id();
+	if (xml_id) {
+		if (asset->resource_id().get() != xml_id) {
+			notes.push_back ({ VerificationNote::Type::BV21_ERROR, VerificationNote::Code::MISMATCHED_TIMED_TEXT_RESOURCE_ID });
+		}
 
-	if (asset->id() == asset->resource_id().get() || asset->id() == asset->xml_id()) {
-		notes.push_back ({ VerificationNote::Type::BV21_ERROR, VerificationNote::Code::INCORRECT_TIMED_TEXT_ASSET_ID });
+		if (asset->id() == asset->resource_id().get() || asset->id() == xml_id) {
+			notes.push_back ({ VerificationNote::Type::BV21_ERROR, VerificationNote::Code::INCORRECT_TIMED_TEXT_ASSET_ID });
+		}
+	} else {
+		notes.push_back ({VerificationNote::Type::WARNING, VerificationNote::Code::MISSED_CHECK_OF_ENCRYPTED});
 	}
 }
 
@@ -728,7 +733,11 @@ verify_subtitle_asset (
 	/* Note: we must not use SubtitleAsset::xml_as_string() here as that will mean the data on disk
 	 * gets passed through libdcp which may clean up and therefore hide errors.
 	 */
-	validate_xml (asset->raw_xml(), xsd_dtd_directory, notes);
+	if (asset->raw_xml()) {
+		validate_xml (asset->raw_xml().get(), xsd_dtd_directory, notes);
+	} else {
+		notes.push_back ({VerificationNote::Type::WARNING, VerificationNote::Code::MISSED_CHECK_OF_ENCRYPTED});
+	}
 
 	auto smpte = dynamic_pointer_cast<const SMPTESubtitleAsset>(asset);
 	if (smpte) {
@@ -752,15 +761,19 @@ verify_closed_caption_asset (
 	/* Note: we must not use SubtitleAsset::xml_as_string() here as that will mean the data on disk
 	 * gets passed through libdcp which may clean up and therefore hide errors.
 	 */
-	validate_xml (asset->raw_xml(), xsd_dtd_directory, notes);
+	auto raw_xml = asset->raw_xml();
+	if (raw_xml) {
+		validate_xml (*raw_xml, xsd_dtd_directory, notes);
+		if (raw_xml->size() > 256 * 1024) {
+			notes.push_back ({VerificationNote::Type::BV21_ERROR, VerificationNote::Code::INVALID_CLOSED_CAPTION_XML_SIZE_IN_BYTES, raw_convert<string>(raw_xml->size()), *asset->file()});
+		}
+	} else {
+		notes.push_back ({VerificationNote::Type::WARNING, VerificationNote::Code::MISSED_CHECK_OF_ENCRYPTED});
+	}
 
 	auto smpte = dynamic_pointer_cast<const SMPTESubtitleAsset>(asset);
 	if (smpte) {
 		verify_smpte_timed_text_asset (smpte, reel_asset_duration, notes);
-	}
-
-	if (asset->raw_xml().size() > 256 * 1024) {
-		notes.push_back ({VerificationNote::Type::BV21_ERROR, VerificationNote::Code::INVALID_CLOSED_CAPTION_XML_SIZE_IN_BYTES, raw_convert<string>(asset->raw_xml().size()), *asset->file()});
 	}
 }
 
@@ -772,7 +785,7 @@ verify_text_timing (
 	int edit_rate,
 	vector<VerificationNote>& notes,
 	std::function<bool (shared_ptr<Reel>)> check,
-	std::function<string (shared_ptr<Reel>)> xml,
+	std::function<optional<string> (shared_ptr<Reel>)> xml,
 	std::function<int64_t (shared_ptr<Reel>)> duration
 	)
 {
@@ -823,6 +836,12 @@ verify_text_timing (
 			continue;
 		}
 
+		auto reel_xml = xml(reels[i]);
+		if (!reel_xml) {
+			notes.push_back ({VerificationNote::Type::WARNING, VerificationNote::Code::MISSED_CHECK_OF_ENCRYPTED});
+			continue;
+		}
+
 		/* We need to look at <Subtitle> instances in the XML being checked, so we can't use the subtitles
 		 * read in by libdcp's parser.
 		 */
@@ -832,7 +851,7 @@ verify_text_timing (
 		optional<Time> start_time;
 		try {
 			doc = make_shared<cxml::Document>("SubtitleReel");
-			doc->read_string (xml(reels[i]));
+			doc->read_string (*reel_xml);
 			tcr = doc->number_child<int>("TimeCodeRate");
 			auto start_time_string = doc->optional_string_child("StartTime");
 			if (start_time_string) {
@@ -840,7 +859,7 @@ verify_text_timing (
 			}
 		} catch (...) {
 			doc = make_shared<cxml::Document>("DCSubtitle");
-			doc->read_string (xml(reels[i]));
+			doc->read_string (*reel_xml);
 		}
 		parse (doc, tcr, start_time, edit_rate, i == 0);
 		auto end = reel_offset + duration(reels[i]);
@@ -1605,6 +1624,8 @@ dcp::note_to_string (VerificationNote note)
 		DCP_ASSERT (parts.size() == 2);
 		return String::compose("The reel duration of some timed text (%1) is not the same as the ContainerDuration of its MXF (%2).", parts[0], parts[1]);
 	}
+	case VerificationNote::Code::MISSED_CHECK_OF_ENCRYPTED:
+		return "Some aspect of this DCP could not be checked because it is encrypted.";
 	}
 
 	return "";
@@ -1615,6 +1636,29 @@ bool
 dcp::operator== (dcp::VerificationNote const& a, dcp::VerificationNote const& b)
 {
 	return a.type() == b.type() && a.code() == b.code() && a.note() == b.note() && a.file() == b.file() && a.line() == b.line();
+}
+
+
+bool
+dcp::operator< (dcp::VerificationNote const& a, dcp::VerificationNote const& b)
+{
+	if (a.type() != b.type()) {
+		return a.type() < b.type();
+	}
+
+	if (a.code() != b.code()) {
+		return a.code() < b.code();
+	}
+
+	if (a.note() != b.note()) {
+		return a.note().get_value_or("") < b.note().get_value_or("");
+	}
+
+	if (a.file() != b.file()) {
+		return a.file().get_value_or("") < b.file().get_value_or("");
+	}
+
+	return a.line().get_value_or(0) < b.line().get_value_or(0);
 }
 
 
