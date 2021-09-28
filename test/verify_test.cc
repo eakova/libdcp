@@ -239,12 +239,19 @@ void
 check_verify_result (vector<path> dir, vector<dcp::VerificationNote> test_notes)
 {
 	auto notes = dcp::verify ({dir}, &stage, &progress, xsd_test);
-	BOOST_REQUIRE_EQUAL (notes.size(), test_notes.size());
 	std::sort (notes.begin(), notes.end());
 	std::sort (test_notes.begin(), test_notes.end());
-	for (auto i = 0U; i < notes.size(); ++i) {
-		BOOST_REQUIRE_MESSAGE (notes[i] == test_notes[i], "Note from verify:\n" << notes[i] << "\ndoes not match the expected:\n" << test_notes[i]);
+
+	string message = "\nVerification notes from test:\n";
+	for (auto i: notes) {
+		message += "  " + note_to_string(i) + "\n";
 	}
+	message += "Expected:\n";
+	for (auto i: test_notes) {
+		message += "  " + note_to_string(i) + "\n";
+	}
+
+	BOOST_REQUIRE_MESSAGE (notes == test_notes, message);
 }
 
 
@@ -372,9 +379,9 @@ BOOST_AUTO_TEST_CASE (verify_mismatched_picture_sound_hashes)
 			{ dcp::VerificationNote::Type::ERROR, dcp::VerificationNote::Code::MISMATCHED_CPL_HASHES, dcp_test1_cpl_id, canonical(dir / dcp_test1_cpl) },
 			{ dcp::VerificationNote::Type::ERROR, dcp::VerificationNote::Code::MISMATCHED_PICTURE_HASHES, canonical(dir / "video.mxf") },
 			{ dcp::VerificationNote::Type::ERROR, dcp::VerificationNote::Code::MISMATCHED_SOUND_HASHES, canonical(dir / "audio.mxf") },
-			{ dcp::VerificationNote::Type::ERROR, dcp::VerificationNote::Code::INVALID_XML, "value 'xD9HpNAjKsECGtJEWtwV2/T5ndG8=' is invalid Base64-encoded binary", canonical(dir / dcp_test1_pkl), 26 },
+			{ dcp::VerificationNote::Type::ERROR, dcp::VerificationNote::Code::INVALID_XML, "value 'xLq7ot/GobgrqUYdlbR8FCD5APqs=' is invalid Base64-encoded binary", canonical(dir / dcp_test1_pkl), 26 },
 			{ dcp::VerificationNote::Type::ERROR, dcp::VerificationNote::Code::INVALID_XML, "value 'xgVKhC9IkWyzQbgzpFcJ1bpqbtwk=' is invalid Base64-encoded binary", canonical(dir / dcp_test1_pkl), 19 },
-			{ dcp::VerificationNote::Type::ERROR, dcp::VerificationNote::Code::INVALID_XML, "value 'xz/y4fI+ocWzVB7cr8pVt2OYpOHA=' is invalid Base64-encoded binary", canonical(dir / dcp_test1_pkl), 12 }
+			{ dcp::VerificationNote::Type::ERROR, dcp::VerificationNote::Code::INVALID_XML, "value 'xc1DRq6GaSzV2brF0YnSNed46nqk=' is invalid Base64-encoded binary", canonical(dir / dcp_test1_pkl), 12 }
 		});
 }
 
@@ -756,6 +763,63 @@ BOOST_AUTO_TEST_CASE (verify_invalid_smpte_subtitles)
 			},
 			{ dcp::VerificationNote::Type::BV21_ERROR, dcp::VerificationNote::Code::MISSING_SUBTITLE_START_TIME, canonical(dir / "subs.mxf") },
 			{ dcp::VerificationNote::Type::BV21_ERROR, dcp::VerificationNote::Code::MISSING_CPL_METADATA, cpl->id(), cpl->file().get() },
+		});
+}
+
+
+BOOST_AUTO_TEST_CASE (verify_empty_text_node_in_subtitles)
+{
+	path const dir("build/test/verify_empty_text_node_in_subtitles");
+	prepare_directory (dir);
+	copy_file ("test/data/empty_text.mxf", dir / "subs.mxf");
+	auto asset = make_shared<dcp::SMPTESubtitleAsset>(dir / "subs.mxf");
+	auto reel_asset = make_shared<dcp::ReelSMPTESubtitleAsset>(asset, dcp::Fraction(24, 1), 192, 0);
+	auto cpl = write_dcp_with_single_asset (dir, reel_asset);
+
+	check_verify_result (
+		{ dir },
+		{
+			{ dcp::VerificationNote::Type::WARNING, dcp::VerificationNote::Code::EMPTY_TEXT },
+			{ dcp::VerificationNote::Type::WARNING, dcp::VerificationNote::Code::INVALID_SUBTITLE_FIRST_TEXT_TIME },
+			{ dcp::VerificationNote::Type::BV21_ERROR, dcp::VerificationNote::Code::MISSING_SUBTITLE_LANGUAGE, canonical(dir / "subs.mxf") },
+			{ dcp::VerificationNote::Type::BV21_ERROR, dcp::VerificationNote::Code::MISSING_CPL_METADATA, cpl->id(), cpl->file().get() },
+		});
+}
+
+
+/** A <Text> node with no content except some <Font> nodes, which themselves do have content */
+BOOST_AUTO_TEST_CASE (verify_empty_text_node_in_subtitles_with_child_nodes)
+{
+	path const dir("build/test/verify_empty_text_node_in_subtitles_with_child_nodes");
+	prepare_directory (dir);
+	copy_file ("test/data/empty_but_with_children.xml", dir / "subs.xml");
+	auto asset = make_shared<dcp::InteropSubtitleAsset>(dir / "subs.xml");
+	auto reel_asset = make_shared<dcp::ReelInteropSubtitleAsset>(asset, dcp::Fraction(24, 1), 192, 0);
+	auto cpl = write_dcp_with_single_asset (dir, reel_asset, dcp::Standard::INTEROP);
+
+	check_verify_result (
+		{ dir },
+		{
+			{ dcp::VerificationNote::Type::BV21_ERROR, dcp::VerificationNote::Code::INVALID_STANDARD },
+		});
+}
+
+
+/** A <Text> node with no content except some <Font> nodes, which themselves also have no content */
+BOOST_AUTO_TEST_CASE (verify_empty_text_node_in_subtitles_with_empty_child_nodes)
+{
+	path const dir("build/test/verify_empty_text_node_in_subtitles_with_empty_child_nodes");
+	prepare_directory (dir);
+	copy_file ("test/data/empty_with_empty_children.xml", dir / "subs.xml");
+	auto asset = make_shared<dcp::InteropSubtitleAsset>(dir / "subs.xml");
+	auto reel_asset = make_shared<dcp::ReelInteropSubtitleAsset>(asset, dcp::Fraction(24, 1), 192, 0);
+	auto cpl = write_dcp_with_single_asset (dir, reel_asset, dcp::Standard::INTEROP);
+
+	check_verify_result (
+		{ dir },
+		{
+			{ dcp::VerificationNote::Type::BV21_ERROR, dcp::VerificationNote::Code::INVALID_STANDARD },
+			{ dcp::VerificationNote::Type::WARNING, dcp::VerificationNote::Code::EMPTY_TEXT },
 		});
 }
 
@@ -2442,6 +2506,7 @@ BOOST_AUTO_TEST_CASE (verify_missing_extension_metadata1)
 		"A Test DCP"
 		);
 
+	BOOST_REQUIRE_EQUAL (dcp->cpls().size(), 1U);
 	auto cpl = dcp->cpls()[0];
 
 	{

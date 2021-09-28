@@ -138,10 +138,8 @@ CPL::CPL (boost::filesystem::path file)
 		throw XMLError ("Missing ContentVersion tag in CPL");
 	}
 	auto rating_list = f.node_child ("RatingList");
-	if (rating_list) {
-		for (auto i: rating_list->node_children("Rating")) {
-			_ratings.push_back (Rating(i));
-		}
+	for (auto i: rating_list->node_children("Rating")) {
+		_ratings.push_back (Rating(i));
 	}
 
 	for (auto i: f.node_child("ReelList")->node_children("Reel")) {
@@ -149,14 +147,12 @@ CPL::CPL (boost::filesystem::path file)
 	}
 
 	auto reel_list = f.node_child ("ReelList");
-	if (reel_list) {
-		auto reels = reel_list->node_children("Reel");
-		if (!reels.empty()) {
-			auto asset_list = reels.front()->node_child("AssetList");
-			auto metadata = asset_list->optional_node_child("CompositionMetadataAsset");
-			if (metadata) {
-				read_composition_metadata_asset (metadata);
-			}
+	auto reels = reel_list->node_children("Reel");
+	if (!reels.empty()) {
+		auto asset_list = reels.front()->node_child("AssetList");
+		auto metadata = asset_list->optional_node_child("CompositionMetadataAsset");
+		if (metadata) {
+			read_composition_metadata_asset (metadata);
 		}
 	}
 
@@ -316,6 +312,23 @@ CPL::read_composition_metadata_asset (cxml::ConstNodePtr node)
 			_additional_subtitle_languages.push_back (sll_split[i]);
 		}
 	}
+
+	auto eml = node->optional_node_child ("ExtensionMetadataList");
+	if (eml) {
+		for (auto i: eml->node_children("ExtensionMetadata")) {
+			auto name = i->optional_string_child("Name");
+			if (name && *name == "Sign Language Video") {
+				auto property_list = i->node_child("PropertyList");
+				for (auto j: property_list->node_children("Property")) {
+					auto name = j->optional_string_child("Name");
+					auto value = j->optional_string_child("Value");
+					if (name && value && *name == "Language Tag") {
+						_sign_language_video_language = *value;
+					}
+				}
+			}
+		}
+	}
 }
 
 
@@ -423,13 +436,23 @@ CPL::maybe_write_composition_metadata_asset (xmlpp::Element* node) const
 		meta->add_child("MainSubtitleLanguageList", "meta")->add_child_text(lang);
 	}
 
+	auto metadata_list = meta->add_child("ExtensionMetadataList", "meta");
+
+	auto add_extension_metadata = [metadata_list](string scope, string name, string property_name, string property_value) {
+		auto extension = metadata_list->add_child("ExtensionMetadata", "meta");
+		extension->set_attribute("scope", scope);
+		extension->add_child("Name", "meta")->add_child_text(name);
+		auto property = extension->add_child("PropertyList", "meta")->add_child("Property", "meta");
+		property->add_child("Name", "meta")->add_child_text(property_name);
+		property->add_child("Value", "meta")->add_child_text(property_value);
+	};
+
 	/* SMPTE Bv2.1 8.6.3 */
-	auto extension = meta->add_child("ExtensionMetadataList", "meta")->add_child("ExtensionMetadata", "meta");
-	extension->set_attribute("scope", "http://isdcf.com/ns/cplmd/app");
-	extension->add_child("Name", "meta")->add_child_text("Application");
-	auto property = extension->add_child("PropertyList", "meta")->add_child("Property", "meta");
-	property->add_child("Name", "meta")->add_child_text("DCP Constraints Profile");
-	property->add_child("Value", "meta")->add_child_text("SMPTE-RDD-52:2020-Bv2.1");
+	add_extension_metadata ("http://isdcf.com/ns/cplmd/app", "Application", "DCP Constraints Profile", "SMPTE-RDD-52:2020-Bv2.1");
+
+	if (_sign_language_video_language) {
+		add_extension_metadata ("http://isdcf.com/2017/10/SignLanguageVideo", "Sign Language Video", "Language Tag", *_sign_language_video_language);
+	}
 
 	if (_reels.front()->main_sound()) {
 		auto asset = _reels.front()->main_sound()->asset();
